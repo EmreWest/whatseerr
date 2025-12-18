@@ -68,7 +68,34 @@ export async function searchTitle(client, cfg, query, type, year) {
   return filtered;
 }
 
-export async function createRequest(client, cfg, media) {
+/**
+ * Gets media details from Jellyseerr (useful for getting season information for TV shows)
+ * @param {Object} client - HTTP client
+ * @param {Object} cfg - Configuration
+ * @param {number} mediaId - Media ID
+ * @param {number} mediaType - Media type (1=movie, 2=tv)
+ * @returns {Promise<Object>} Media details
+ */
+export async function getMediaDetails(client, cfg, mediaId, mediaType) {
+  const headers = {
+    'X-Api-Key': cfg.apiKey,
+  };
+
+  const typePath = mediaType === 1 ? 'movie' : 'tv';
+  const res = await client.request('GET', `/api/v1/${typePath}/${mediaId}`, {
+    headers,
+  });
+
+  if (res.status !== 200) {
+    const err = new Error(`Failed to get media details: ${res.status}`);
+    err.response = res;
+    throw err;
+  }
+
+  return res.data;
+}
+
+export async function createRequest(client, cfg, media, seasons = null) {
   const headers = {
     'X-Api-Key': cfg.apiKey,
   };
@@ -77,6 +104,11 @@ export async function createRequest(client, cfg, media) {
     mediaType: media.mediaType || (media.title ? 1 : 2), // guess if missing
     mediaId: media.id,
   };
+
+  // Add seasons for TV shows if specified
+  if (seasons && Array.isArray(seasons) && seasons.length > 0) {
+    body.seasons = seasons;
+  }
 
   if (cfg.defaultUserId) {
     body.requestedByUserId = cfg.defaultUserId;

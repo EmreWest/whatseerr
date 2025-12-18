@@ -8,7 +8,7 @@
  */
 
 import http from 'http';
-import { createHttpClient, searchTitle, createRequest, formatMedia } from './request.js';
+import { createHttpClient, searchTitle, createRequest, formatMedia, getMediaDetails } from './request.js';
 import { createWahaClient, sendText } from './waha-client.js';
 import { loadConfig, getWebhookUrl } from './utils.js';
 
@@ -20,6 +20,9 @@ const MAX_ERROR_BODY_LENGTH = 500;
 
 // In-memory store for user search results (chatId -> results array)
 const userSearchResults = new Map();
+
+// Store selected TV shows waiting for season selection (chatId -> media object)
+const pendingTvSelections = new Map();
 
 // Track processed message IDs to prevent duplicates
 const processedMessages = new Set();
@@ -59,6 +62,71 @@ function extractSearchQuery(messageText) {
   }
   
   return null;
+}
+
+/**
+ * Parses season selection from user input
+ * Supports: "1", "1,2,3", "1 2 3", "all", "0" (cancel)
+ * @param {string} input - User input
+ * @param {number} maxSeasons - Maximum number of seasons available
+ * @returns {Object} { seasons: number[] | null, cancelled: boolean, error: string | null }
+ */
+function parseSeasonSelection(input, maxSeasons) {
+  const trimmed = input.trim().toLowerCase();
+  
+  if (trimmed === '0' || trimmed === 'cancel') {
+    return { seasons: null, cancelled: true, error: null };
+  }
+  
+  if (trimmed === 'all') {
+    return { seasons: Array.from({ length: maxSeasons }, (_, i) => i + 1), cancelled: false, error: null };
+  }
+  
+  // Parse comma or space-separated numbers
+  const numbers = trimmed.split(/[,\s]+/).map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+  
+  if (numbers.length === 0) {
+    return { seasons: null, cancelled: false, error: 'Invalid format. Use numbers (e.g., "1" or "1,2,3") or "all"' };
+  }
+  
+  // Validate all numbers are within range
+  const invalid = numbers.filter(n => n < 1 || n > maxSeasons);
+  if (invalid.length > 0) {
+    return { seasons: null, cancelled: false, error: `Invalid season numbers: ${invalid.join(', ')}. Valid range: 1-${maxSeasons}` };
+  }
+  
+  // Remove duplicates and sort
+  const uniqueSeasons = [...new Set(numbers)].sort((a, b) => a - b);
+  
+  return { seasons: uniqueSeasons, cancelled: false, error: null };
+}
+
+/**
+ * Formats available seasons into a message
+ * @param {Array} seasons - Array of season objects from Jellyseerr
+ * @returns {string} Formatted message
+ */
+function formatSeasons(seasons) {
+  if (!seasons || seasons.length === 0) {
+    return 'No seasons available.';
+  }
+  
+  let message = 'Available seasons:\n\n';
+  seasons.forEach((season, idx) => {
+    // Handle different season object structures
+    const seasonNum = season.seasonNumber !== undefined ? season.seasonNumber : 
+                      season.season_number !== undefined ? season.season_number :
+                      idx + 1;
+    const name = (season.name || season.seasonName) ? ` - ${season.name || season.seasonName}` : '';
+    const episodeCount = (season.episodeCount || season.episode_count) ? 
+                         ` (${season.episodeCount || season.episode_count} episodes)` : '';
+    message += `${seasonNum}. Season ${seasonNum}${name}${episodeCount}\n`;
+  });
+  message += '\n0. Cancel\n';
+  message += 'all. Request all seasons\n';
+  message += '\nReply with season numbers (e.g., "1" or "1,2,3" or "all"):';
+  
+  return message;
 }
 
 /**
@@ -156,6 +224,72 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
     console.log(`[INFO] Received message from ${chatId}: "${messageText}"`);
 
+    // Check if user is selecting seasons for a TV show
+    if (pendingTvSelections.has(chatId)) {
+      const tvShow = pendingTvSelections.get(chatId);
+      const { title: chosenTitle } = formatMedia(tvShow);
+      
+      console.log(`[INFO] User ${chatId} is selecting seasons for TV show: "${chosenTitle}"`);
+      
+      // Parse season selection - use actual seasons array length
+      const seasons = tvShow.seasons || [];
+      const maxSeasons = seasons.length > 0 ? seasons.length : (tvShow.numberOfSeasons || 10);
+      const seasonSelection = parseSeasonSelection(messageText, maxSeasons);
+      
+      if (seasonSelection.cancelled) {
+        console.log('[INFO] User cancelled season selection');
+        pendingTvSelections.delete(chatId);
+        userSearchResults.delete(chatId);
+        await sendText(wahaClient, cfg, chatId, 'Cancelled. Send /request <name> to search again.');
+        return;
+      }
+      
+      if (seasonSelection.error) {
+        await sendText(wahaClient, cfg, chatId, `❌ ${seasonSelection.error}`);
+        return;
+      }
+      
+      // Create request with selected seasons
+      const seasons = seasonSelection.seasons;
+      const seasonsText = seasons.length === maxSeasons ? 'all seasons' : `season${seasons.length > 1 ? 's' : ''} ${seasons.join(', ')}`;
+      
+      console.log(`[INFO] Creating request for TV show "${chosenTitle}" with ${seasonsText}`);
+      await sendText(wahaClient, cfg, chatId, `Requesting "${chosenTitle}" - ${seasonsText}...`);
+      
+      try {
+        const res = await createRequest(jellyseerrClient, cfg, tvShow, seasons);
+        console.log(`[INFO] Jellyseerr request response status: ${res.status}`);
+        console.log('[DEBUG] Jellyseerr response data:', JSON.stringify(res.data, null, 2));
+        
+        const statusMessage = getRequestStatusMessage(res, 'TV');
+        
+        if (res.status === 201 || res.status === 200) {
+          console.log('[SUCCESS] Request created successfully');
+        } else if (res.status === 409) {
+          const data = res.data || {};
+          if (data.status === 'available' || data.mediaStatus === 'available' || 
+              data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
+            console.log('[INFO] Media is already available');
+          } else {
+            console.log('[INFO] Media is already requested');
+          }
+        } else {
+          console.error('[ERROR] Unexpected response from Jellyseerr:', res.status, res.data);
+        }
+        
+        await sendText(wahaClient, cfg, chatId, statusMessage);
+      } catch (err) {
+        console.error('[ERROR] Failed to create request:', err);
+        console.error('[ERROR] Stack:', err.stack);
+        await sendText(wahaClient, cfg, chatId, `❌ Error creating request: ${err.message}`);
+      }
+      
+      // Clear stored data
+      pendingTvSelections.delete(chatId);
+      userSearchResults.delete(chatId);
+      return;
+    }
+
     // Check if message is a number (selection from previous search)
     const selectionNumber = parseInt(messageText, 10);
     if (!isNaN(selectionNumber) && userSearchResults.has(chatId)) {
@@ -175,7 +309,60 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       if (selectionNumber >= 1 && selectionNumber <= results.length) {
         const chosen = results[selectionNumber - 1];
         const { title: chosenTitle, year: chosenYear, typeStr } = formatMedia(chosen);
+        const isTvShow = typeStr === 'TV' || chosen.mediaType === 2 || chosen.mediaType === 'tv';
 
+        // For TV shows, fetch details and show season selection
+        if (isTvShow) {
+          console.log(`[INFO] TV show selected: "${chosenTitle}" - fetching season details...`);
+          await sendText(wahaClient, cfg, chatId, `Fetching season information for "${chosenTitle}"...`);
+          
+          try {
+            const mediaDetails = await getMediaDetails(jellyseerrClient, cfg, chosen.id, 2);
+            const seasons = mediaDetails.seasons || [];
+            
+            if (seasons.length === 0) {
+              // No season info available, request all seasons
+              console.log('[WARN] No season information available, requesting all seasons');
+              await sendText(wahaClient, cfg, chatId, `No season details found. Requesting all seasons for "${chosenTitle}"...`);
+              
+              const res = await createRequest(jellyseerrClient, cfg, chosen);
+              const statusMessage = getRequestStatusMessage(res, typeStr);
+              await sendText(wahaClient, cfg, chatId, statusMessage);
+              
+              userSearchResults.delete(chatId);
+              return;
+            }
+            
+            // Store TV show for season selection
+            chosen.seasons = seasons;
+            pendingTvSelections.set(chatId, chosen);
+            
+            // Show season selection
+            const seasonsMessage = formatSeasons(seasons);
+            await sendText(wahaClient, cfg, chatId, seasonsMessage);
+            
+            // Keep search results in case user wants to cancel and pick something else
+            return;
+          } catch (err) {
+            console.error('[ERROR] Failed to get media details:', err);
+            await sendText(wahaClient, cfg, chatId, `❌ Error fetching season information: ${err.message}. Requesting all seasons...`);
+            
+            // Fallback: request all seasons
+            try {
+              const res = await createRequest(jellyseerrClient, cfg, chosen);
+              const statusMessage = getRequestStatusMessage(res, typeStr);
+              await sendText(wahaClient, cfg, chatId, statusMessage);
+            } catch (reqErr) {
+              console.error('[ERROR] Failed to create request:', reqErr);
+              await sendText(wahaClient, cfg, chatId, `❌ Error creating request: ${reqErr.message}`);
+            }
+            
+            userSearchResults.delete(chatId);
+            return;
+          }
+        }
+        
+        // For movies, create request directly
         console.log(`[INFO] Creating request for: ${typeStr} "${chosenTitle}" (${chosenYear})`);
 
         // Send confirmation
