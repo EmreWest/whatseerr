@@ -20,7 +20,8 @@
   "logging": {
     "level": "info",
     "timestamps": false
-  }
+  },
+  "command": "r,request,s,search"
 }
 
 

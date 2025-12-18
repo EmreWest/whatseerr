@@ -22,6 +22,7 @@ cp config.example.json config.json
    - `webhook.port`: port for webhook server
    - `webhook.path`: webhook path (example: `/webhook`)
    - `logging.level`: `info` (default) or `debug`
+   - `command`: command prefix(es) for requests, comma-separated (default: `"r"`, example: `"r,request,s,search"`)
 
 ### Running CLI Version
 
@@ -64,7 +65,7 @@ The script will:
    - Enable events: `message`, `message.any`
 
 3. **Usage via WhatsApp:**
-   - Send: `/request The Matrix`
+   - Send: `r The Matrix` (or your configured command)
    - Bot will search and return numbered results
    - Reply with a number (e.g., "1") to request that item
 

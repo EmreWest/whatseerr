@@ -123,6 +123,7 @@ export async function createRequest(client, cfg, media, seasons = null, logger =
     // Overseerr expects "movie" | "tv" (see API reference)
     mediaType,
     mediaId: media.id,
+    is4k: false,
   };
 
   // Add seasons for TV shows if specified

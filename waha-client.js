@@ -32,6 +32,15 @@ export function createWahaClient(baseUrl) {
  */
 export async function sendText(client, cfg, chatId, text, options = {}) {
   const { replyTo = null, linkPreview = true } = options;
+  const logger = cfg.__logger;
+
+  // Log outgoing message at info level with proper formatting
+  // Show full message if short, or first 150 chars with ellipsis if long
+  const maxPreviewLength = 150;
+  const preview = text.length > maxPreviewLength 
+    ? text.substring(0, maxPreviewLength).trim() + '...' 
+    : text;
+  logger?.info(`📤 Message to ${chatId}: ${preview}`);
 
   const headers = {};
   if (cfg.waha?.apiKey) {
@@ -49,9 +58,22 @@ export async function sendText(client, cfg, chatId, text, options = {}) {
     body.reply_to = replyTo;
   }
 
+  logger?.debug('Sending WAHA message', {
+    chatId,
+    textLength: text.length,
+    replyTo,
+    linkPreview,
+    session: body.session,
+  });
+
   const res = await client.request('POST', '/api/sendText', {
     headers,
     body,
+  });
+
+  logger?.debug('WAHA sendText response', {
+    status: res.status,
+    messageId: res.data?.id,
   });
 
   return res;
