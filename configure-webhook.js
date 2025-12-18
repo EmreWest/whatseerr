@@ -66,8 +66,9 @@ async function configureWebhook() {
       console.log(`[INFO] Session "${session}" exists. Updating webhook configuration...`);
       
       // Update session with webhook configuration
-      // Note: WAHA API might require stopping the session first
+      // WAHA OpenAPI uses PUT /api/sessions/{session} with SessionUpdateRequest.
       const updateBody = {
+        name: session,
         config: {
           webhooks: [
             {
@@ -78,8 +79,7 @@ async function configureWebhook() {
         }
       };
 
-      // Try to update via PATCH or PUT
-      const updateRes = await client.request('PATCH', `/api/sessions/${session}`, {
+      const updateRes = await client.request('PUT', `/api/sessions/${session}`, {
         headers,
         body: updateBody
       });
@@ -89,8 +89,7 @@ async function configureWebhook() {
         console.log('[INFO] You may need to restart the session for changes to take effect.');
         return;
       } else {
-        console.log(`[WARN] PATCH not supported (${updateRes.status}), trying alternative method...`);
-        console.log('[INFO] You may need to configure webhooks manually via WAHA dashboard or API.');
+        console.log(`[WARN] Failed to update session (${updateRes.status}). You may need to configure webhooks manually via WAHA dashboard or API.`);
         console.log('[INFO] Webhook configuration:');
         console.log(JSON.stringify(updateBody, null, 2));
       }

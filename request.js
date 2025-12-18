@@ -34,7 +34,7 @@ export async function searchTitle(client, cfg, query, type, year) {
 
   const res = await client.request(
     'GET',
-    `/api/v1/search?query=${encodedQuery}`,
+    `search?query=${encodedQuery}`,
     {
       headers,
     }
@@ -53,8 +53,13 @@ export async function searchTitle(client, cfg, query, type, year) {
   let filtered = results;
 
   if (type) {
-    const mediaType = type === 'movie' ? 1 : 2; // Jellyseerr uses 1=movie, 2=tv in many places
-    filtered = filtered.filter((r) => r.mediaType === mediaType || r.mediaType === type);
+    filtered = filtered.filter((r) => {
+      if (r.mediaType === type) return true;
+      // Some installs/versions may return numeric mediaType (1=movie, 2=tv)
+      if (r.mediaType === 1 && type === 'movie') return true;
+      if (r.mediaType === 2 && type === 'tv') return true;
+      return false;
+    });
   }
 
   if (year) {
@@ -81,8 +86,8 @@ export async function getMediaDetails(client, cfg, mediaId, mediaType) {
     'X-Api-Key': cfg.jellyseerr.apiKey,
   };
 
-  const typePath = mediaType === 1 ? 'movie' : 'tv';
-  const res = await client.request('GET', `/api/v1/${typePath}/${mediaId}`, {
+  const typePath = mediaType === 1 || mediaType === 'movie' ? 'movie' : 'tv';
+  const res = await client.request('GET', `${typePath}/${mediaId}`, {
     headers,
   });
 
@@ -100,8 +105,20 @@ export async function createRequest(client, cfg, media, seasons = null) {
     'X-Api-Key': cfg.jellyseerr.apiKey,
   };
 
+  const mediaType =
+    media.mediaType === 'movie' || media.mediaType === 'tv'
+      ? media.mediaType
+      : media.mediaType === 1
+        ? 'movie'
+        : media.mediaType === 2
+          ? 'tv'
+          : media.title
+            ? 'movie'
+            : 'tv';
+
   const body = {
-    mediaType: media.mediaType || (media.title ? 1 : 2), // guess if missing
+    // Overseerr expects "movie" | "tv" (see API reference)
+    mediaType,
     mediaId: media.id,
   };
 
@@ -118,7 +135,7 @@ export async function createRequest(client, cfg, media, seasons = null) {
     body.serverId = cfg.jellyseerr.defaultServer;
   }
 
-  const res = await client.request('POST', '/api/v1/request', {
+  const res = await client.request('POST', 'request', {
     headers,
     body,
   });
@@ -147,7 +164,7 @@ export function formatMedia(media) {
 
 async function main() {
   const cfg = loadConfig({ requireWaha: false });
-  const client = createHttpClient(cfg.jellyseerr.baseUrl);
+  const client = createHttpClient(cfg.jellyseerr.apiBaseUrl);
   const rl = createReadline();
 
   try {

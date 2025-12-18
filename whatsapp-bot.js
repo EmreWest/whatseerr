@@ -587,7 +587,7 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
  */
 async function main() {
   const cfg = loadConfig({ requireWaha: true, requireWebhook: true });
-  const jellyseerrClient = createHttpClient(cfg.jellyseerr.baseUrl);
+  const jellyseerrClient = createHttpClient(cfg.jellyseerr.apiBaseUrl);
   const wahaClient = createWahaClient(cfg.waha.baseUrl);
 
   console.log('[INFO] Starting WhatsApp bot for Jellyseerr...');

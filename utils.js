@@ -18,6 +18,20 @@ function buildBaseUrl({ protocol, host, port }) {
   return `${protocol}://${host}:${port}`;
 }
 
+function buildOverseerrApiBaseUrl(baseUrl) {
+  if (!baseUrl) return null;
+  const u = new URL(baseUrl);
+  const normalizedPath = u.pathname.replace(/\/+$/, '');
+  if (normalizedPath.endsWith('/api/v1')) {
+    u.pathname = normalizedPath;
+  } else {
+    u.pathname = `${normalizedPath}/api/v1`;
+  }
+  // IMPORTANT: Ensure trailing slash so URL resolution keeps the /api/v1/ prefix.
+  // (new URL("request", "http://host/api/v1/") => http://host/api/v1/request)
+  return u.toString().replace(/\/+$/, '') + '/';
+}
+
 function normalizeConfig(rawCfg) {
   const cfg = { ...rawCfg };
 
@@ -53,6 +67,12 @@ function normalizeConfig(rawCfg) {
   }
   if (!cfg.waha.baseUrl && cfg.protocol && cfg.host && cfg.waha?.port) {
     cfg.waha.baseUrl = buildBaseUrl({ protocol: cfg.protocol, host: cfg.host, port: cfg.waha.port });
+  }
+
+  // Derived API base URL for Overseerr/Jellyseerr that includes the /api/v1 prefix.
+  // This lets call sites use paths like "/request" to match the official API reference.
+  if (cfg.jellyseerr?.baseUrl) {
+    cfg.jellyseerr.apiBaseUrl = buildOverseerrApiBaseUrl(cfg.jellyseerr.baseUrl);
   }
 
   // Back-compat: if caller code still references legacy keys, keep them aligned.
