@@ -51,12 +51,12 @@ export function loadConfig(options = {}) {
 /**
  * Gets the webhook URL from config, with optional host override
  * @param {Object} cfg - Configuration object
- * @param {string} hostOverride - Optional host override (defaults to 192.168.8.25)
+ * @param {string} hostOverride - Optional host override (defaults to "localhost" if not set in config)
  * @returns {string} Webhook URL
  */
 export function getWebhookUrl(cfg, hostOverride = null) {
-  const host = hostOverride || cfg.webhook?.host || '192.168.8.25';
-  const port = cfg.webhook?.port || 3000;
+  const host = hostOverride || cfg.webhook?.host || 'localhost';
+  const port = cfg.webhook?.port || 3003;
   const webhookPath = cfg.webhook?.path || '/webhook';
   return `http://${host}:${port}${webhookPath}`;
 }

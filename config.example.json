@@ -10,6 +10,7 @@
     "session": "default"
   },
   "webhook": {
+    "host": "localhost",
     "port": 3003,
     "path": "/webhook"
   }
