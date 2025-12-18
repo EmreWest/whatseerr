@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createLogger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -96,9 +97,10 @@ function normalizeConfig(rawCfg) {
  */
 export function loadConfig(options = {}) {
   const { requireWaha = false, requireWebhook = false, requireWebhookHost = false } = options;
+  const logger = createLogger({ logging: { level: 'error' } });
 
   if (!fs.existsSync(CONFIG_PATH)) {
-    console.error('[FATAL] Config file not found. Please create config.json and fill it in.');
+    logger.error('Config file not found. Please create config.json and fill it in.');
     process.exit(1);
   }
 
@@ -107,40 +109,40 @@ export function loadConfig(options = {}) {
     const cfg = normalizeConfig(JSON.parse(raw));
 
     if (!cfg.jellyseerr?.baseUrl || !cfg.jellyseerr?.apiKey) {
-      console.error('[FATAL] config.json must contain Jellyseerr config: either { "jellyseerr": { "baseUrl", "apiKey" } } or { "protocol", "host", "jellyseerr": { "port", "apiKey" } }.');
+      logger.error('config.json missing Jellyseerr config. Provide either jellyseerr.baseUrl+apiKey or protocol+host+jellyseerr.port+apiKey.');
       process.exit(1);
     }
 
     if (requireWaha && !cfg.waha?.baseUrl) {
-      console.error('[FATAL] config.json must contain WAHA config: either { "waha": { "baseUrl" } } or { "protocol", "host", "waha": { "port" } }.');
+      logger.error('config.json missing WAHA config. Provide either waha.baseUrl or protocol+host+waha.port.');
       process.exit(1);
     }
 
     if (requireWebhook) {
       if (!cfg.webhook?.port || typeof cfg.webhook.port !== 'number') {
-        console.error('[FATAL] config.json must contain "webhook.port" (number).');
+        logger.error('config.json must contain webhook.port (number).');
         process.exit(1);
       }
       if (!cfg.webhook?.path || typeof cfg.webhook.path !== 'string') {
-        console.error('[FATAL] config.json must contain "webhook.path" (string).');
+        logger.error('config.json must contain webhook.path (string).');
         process.exit(1);
       }
     }
 
     if (requireWebhookHost) {
       if (!cfg.protocol || typeof cfg.protocol !== 'string') {
-        console.error('[FATAL] config.json must contain "protocol" (string), e.g. "http" or "https".');
+        logger.error('config.json must contain protocol (string), e.g. "http" or "https".');
         process.exit(1);
       }
       if (!cfg.host || typeof cfg.host !== 'string') {
-        console.error('[FATAL] config.json must contain "host" (string), e.g. "192.168.1.10".');
+        logger.error('config.json must contain host (string), e.g. "192.168.1.10".');
         process.exit(1);
       }
     }
 
     return cfg;
   } catch (err) {
-    console.error('[FATAL] Failed to read config.json:', err.message);
+    logger.error('Failed to read config.json', err?.message || err);
     process.exit(1);
   }
 }

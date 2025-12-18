@@ -220,17 +220,15 @@ async function main() {
       }
 
       if (!candidates || candidates.length === 0) {
-        console.log('No results found.');
+        logger.info('🙈 No results found.');
         continue;
       }
 
       const top = candidates.slice(0, 10);
-      console.log('\nTop results:');
+      logger.info('\n📋 Top results:');
       top.forEach((media, idx) => {
         const { title: displayTitle, year: displayYear, typeStr } = formatMedia(media);
-        console.log(
-          `${idx + 1}. [${typeStr}] ${displayTitle} (${displayYear})`
-        );
+        logger.info(`${idx + 1}. [${typeStr}] ${displayTitle} (${displayYear})`);
       });
 
       const pickInput = await question(
@@ -239,7 +237,7 @@ async function main() {
       );
       const pick = parseInt(pickInput.trim(), 10);
       if (Number.isNaN(pick) || pick < 0 || pick > top.length) {
-        console.log(pick === 0 ? 'Cancelled.' : 'Invalid selection.');
+        logger.info(pick === 0 ? '🚫 Cancelled.' : '⚠️ Invalid selection.');
         continue;
       }
 
@@ -290,7 +288,8 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
-    console.error('Fatal error:', err);
+    const logger = createLogger({ logging: { level: 'error' } });
+    logger.error('Fatal error', err?.message || err);
     process.exit(1);
   });
 }

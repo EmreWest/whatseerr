@@ -196,7 +196,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
     // Check for duplicate messages early (before processing)
     if (messageId && processedMessages.has(messageId)) {
-      console.log(`[INFO] Duplicate message detected (ID: ${messageId}), ignoring`);
+      logger?.debug('Duplicate message detected, ignoring', { messageId });
       return;
     }
 
@@ -267,17 +267,18 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         const statusMessage = getRequestStatusMessage(res, 'TV');
         
         if (res.status === 201 || res.status === 200) {
-          console.log('[SUCCESS] Request created successfully');
+          logger?.debug('Request created successfully');
         } else if (res.status === 409) {
           const data = res.data || {};
           if (data.status === 'available' || data.mediaStatus === 'available' || 
               data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
-            console.log('[INFO] Media is already available');
+            logger?.debug('Media already available');
           } else {
-            console.log('[INFO] Media is already requested');
+            logger?.debug('Media already requested');
           }
         } else {
-          console.error('[ERROR] Unexpected response from Jellyseerr:', res.status, res.data);
+          logger?.error(`Unexpected response from Jellyseerr (status ${res.status})`);
+          logger?.debug('Unexpected response body', res.data);
         }
         
         await sendText(wahaClient, cfg, chatId, statusMessage);
@@ -380,18 +381,19 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           const statusMessage = getRequestStatusMessage(res, typeStr);
           
           if (res.status === 201 || res.status === 200) {
-            console.log('[SUCCESS] Request created successfully');
+            logger?.debug('Request created successfully');
           } else if (res.status === 409) {
             // Determine specific status for logging
             const data = res.data || {};
             if (data.status === 'available' || data.mediaStatus === 'available' || 
                 data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
-              console.log('[INFO] Media is already available');
+              logger?.debug('Media already available');
             } else {
-              console.log('[INFO] Media is already requested');
+              logger?.debug('Media already requested');
             }
           } else {
-            console.error('[ERROR] Unexpected response from Jellyseerr:', res.status, res.data);
+            logger?.error(`Unexpected response from Jellyseerr (status ${res.status})`);
+            logger?.debug('Unexpected response body', res.data);
           }
           
           await sendText(wahaClient, cfg, chatId, statusMessage);
@@ -431,7 +433,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       logger?.debug('Search result count', { count: candidates?.length || 0 });
 
       if (!candidates || candidates.length === 0) {
-        console.log(`[INFO] No results found for "${query}"`);
+        logger?.info(`🙈 No results for: "${query}"`);
         await sendText(wahaClient, cfg, chatId, 'No results found. Try a different search term.');
         userSearchResults.delete(chatId);
         return;
@@ -599,9 +601,9 @@ async function main() {
 
   // Graceful shutdown handler
   const shutdown = () => {
-    console.log('\n[INFO] Shutting down...');
+    logger.info('\n🛑 Shutting down…');
     server.close(() => {
-      console.log('[INFO] Server closed.');
+      logger.info('✅ Server closed.');
       process.exit(0);
     });
   };
@@ -612,8 +614,12 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
-    console.error('[FATAL] Fatal error:', err);
-    console.error('[FATAL] Stack:', err.stack);
+    const cfg = (() => {
+      try { return loadConfig({ requireWaha: false, requireWebhook: false }); } catch { return {}; }
+    })();
+    const logger = createLogger(cfg);
+    logger.error('Fatal error', err?.message || err);
+    logger.debug('Fatal stack', err?.stack);
     process.exit(1);
   });
 }

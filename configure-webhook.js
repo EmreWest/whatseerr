@@ -112,7 +112,8 @@ async function configureWebhook() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   configureWebhook().catch((err) => {
-    console.error('[FATAL] Fatal error:', err);
+    const logger = createLogger({ logging: { level: 'error' } });
+    logger.error('Fatal error', err?.message || err);
     process.exit(1);
   });
 }
