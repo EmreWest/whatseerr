@@ -1,0 +1,7 @@
+{
+  "//_comment": "Copy this file to config.json and fill in your Jellyseerr details.",
+  "baseUrl": "http://192.168.8.25:5055",
+  "apiKey": "MTcwNTY5MTE2NjUwNjI0NTA1ZWI4LWM2NzEtNDVlZi1hNjI5LWViMDI4NGRmYjdiNg==",
+  "defaultUserId": 2,
+  "defaultServer": null
+}

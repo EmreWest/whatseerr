@@ -1,0 +1,18 @@
+{
+  "name": "jellyseerr-cli-requester",
+  "version": "1.0.0",
+  "description": "Simple Node.js CLI to request movies and TV shows from Jellyseerr via text input.",
+  "type": "module",
+  "main": "request.js",
+  "bin": {
+    "jellyseerr-request": "request.js"
+  },
+  "scripts": {
+    "start": "node request.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}
+
+
