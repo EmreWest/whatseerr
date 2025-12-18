@@ -232,8 +232,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       console.log(`[INFO] User ${chatId} is selecting seasons for TV show: "${chosenTitle}"`);
       
       // Parse season selection - use actual seasons array length
-      const seasons = tvShow.seasons || [];
-      const maxSeasons = seasons.length > 0 ? seasons.length : (tvShow.numberOfSeasons || 10);
+      const availableSeasons = tvShow.seasons || [];
+      const maxSeasons = availableSeasons.length > 0 ? availableSeasons.length : (tvShow.numberOfSeasons || 10);
       const seasonSelection = parseSeasonSelection(messageText, maxSeasons);
       
       if (seasonSelection.cancelled) {
