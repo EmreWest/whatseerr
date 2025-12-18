@@ -14,12 +14,12 @@ cp config.example.json config.json
 3. Edit `config.json` and set:
    - `baseUrl`: your Jellyseerr URL, e.g. `http://localhost:5055` or `https://jellyseerr.example.com`
    - `apiKey`: the API key you copied
-   - `waha.baseUrl`: your WAHA API URL (e.g., `http://localhost:8584` or `http://192.168.8.25:8584`)
+   - `waha.baseUrl`: your WAHA API URL (e.g., `http://localhost:8584` or `http://YOUR_WAHA_HOST:8584`)
    - `waha.apiKey`: your WAHA API key
    - `waha.session`: WAHA session name (default: "default")
-   - `webhook.host`: host/IP WAHA should call (set this if WAHA is in Docker or on another machine; example: `192.168.1.10`)
-   - `webhook.port`: port for webhook server (default: 3003)
-   - `webhook.path`: webhook path (default: "/webhook")
+   - `webhook.host`: host/IP WAHA should call (required if you use `npm run configure-webhook`; example: `192.168.1.10`)
+   - `webhook.port`: port for webhook server (required)
+   - `webhook.path`: webhook path (required; example: `/webhook`)
 
 ### Running CLI Version
 

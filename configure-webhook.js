@@ -11,7 +11,7 @@ import { createHttpClient } from './request.js';
 import { loadConfig, getWebhookUrl } from './utils.js';
 
 async function configureWebhook() {
-  const cfg = loadConfig({ requireWaha: true });
+  const cfg = loadConfig({ requireWaha: true, requireWebhook: true, requireWebhookHost: true });
   const webhookUrl = getWebhookUrl(cfg);
   const session = cfg.waha?.session || 'default';
 

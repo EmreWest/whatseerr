@@ -467,8 +467,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
  * Creates and starts the webhook server
  */
 function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
-  const port = cfg.webhook?.port || 3003;
-  const path = cfg.webhook?.path || '/webhook';
+  const port = cfg.webhook.port;
+  const path = cfg.webhook.path;
 
   const server = http.createServer(async (req, res) => {
     // Only handle POST requests to the webhook path
@@ -557,13 +557,14 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
   });
 
   server.listen(port, () => {
-    const webhookUrl = getWebhookUrl(cfg);
     console.log(`[INFO] WhatsApp bot webhook server listening on port ${port}`);
     console.log(`[INFO] Webhook path: ${path}`);
-    if (!cfg.webhook?.host) {
-      console.log('[WARN] webhook.host is not set in config.json; defaulting to "localhost". If WAHA runs in Docker or on another machine, set webhook.host to an IP/hostname WAHA can reach.');
+    try {
+      const webhookUrl = getWebhookUrl(cfg);
+      console.log(`[INFO] Configure WAHA to send webhooks to: ${webhookUrl}`);
+    } catch {
+      console.log('[WARN] webhook.host is not set in config.json, so the bot cannot print a public webhook URL. Set webhook.host to an IP/hostname WAHA can reach, or configure the WAHA webhook URL manually.');
     }
-    console.log(`[INFO] Configure WAHA to send webhooks to: ${webhookUrl}`);
     console.log(`[INFO] Command: ${SEARCH_COMMAND} <movie or TV show name>`);
     console.log(`[INFO] Example: ${SEARCH_COMMAND} The Matrix`);
   });
@@ -585,7 +586,7 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
  * Main function
  */
 async function main() {
-  const cfg = loadConfig({ requireWaha: true });
+  const cfg = loadConfig({ requireWaha: true, requireWebhook: true });
   const jellyseerrClient = createHttpClient(cfg.baseUrl);
   const wahaClient = createWahaClient(cfg.waha.baseUrl);
 
