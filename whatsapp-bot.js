@@ -141,18 +141,29 @@ function getRequestStatusMessage(res, typeStr) {
     return `✅ Request created successfully!`;
   }
 
+  const data = res.data || {};
+  const apiMessage = (() => {
+    if (typeof data === 'string') {
+      const s = data.trim();
+      return s ? s.slice(0, 300) : null;
+    }
+    if (data && typeof data === 'object') {
+      const m = data.message || data.error || data.details || data.reason;
+      return typeof m === 'string' && m.trim() ? m.trim().slice(0, 300) : null;
+    }
+    return null;
+  })();
+
   if (res.status === 409) {
     // Check response data to determine if it's already requested or available
-    const data = res.data || {};
-    
     // Check for status fields that indicate availability
-    if (data.status === 'available' || data.mediaStatus === 'available' || 
+    if (data.status === 'available' || data.mediaStatus === 'available' ||
         data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
       return `✅ This ${typeStr.toLowerCase()} is already available in your library!`;
     }
     
     // Check for status fields that indicate it's requested but not available
-    if (data.status === 'pending' || data.status === 'approved' || 
+    if (data.status === 'pending' || data.status === 'approved' ||
         data.mediaStatus === 'pending' || data.mediaStatus === 'approved' ||
         data.media?.status === 'pending' || data.media?.status === 'approved' ||
         data.media?.mediaStatus === 'pending' || data.media?.mediaStatus === 'approved') {
@@ -168,7 +179,12 @@ function getRequestStatusMessage(res, typeStr) {
     return `ℹ️ This ${typeStr.toLowerCase()} is already requested or available.`;
   }
 
-  return `❌ Failed to create request. Status: ${res.status}`;
+  if (apiMessage) {
+    // Show the API-provided reason (permissions, quotas, etc.) to the user.
+    return `❌ ${apiMessage}`;
+  }
+
+  return `❌ Failed to create request. (HTTP ${res.status})`;
 }
 
 /**
