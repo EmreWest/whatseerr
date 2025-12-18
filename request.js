@@ -111,7 +111,8 @@ export async function createRequest(client, cfg, media, seasons = null) {
   }
 
   if (cfg.jellyseerr.defaultUserId) {
-    body.requestedByUserId = cfg.jellyseerr.defaultUserId;
+    // Overseerr API expects `userId` for "request on behalf of" (requires permissions).
+    body.userId = cfg.jellyseerr.defaultUserId;
   }
   if (cfg.jellyseerr.defaultServer) {
     body.serverId = cfg.jellyseerr.defaultServer;
