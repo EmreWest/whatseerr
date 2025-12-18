@@ -16,93 +16,14 @@
  *        - apiKey: Your Jellyseerr API key (Settings -> General)
  */
 
-import fs from 'fs';
-import path from 'path';
 import readline from 'readline';
-import { fileURLToPath } from 'url';
-import https from 'https';
-import http from 'http';
+import { createHttpClient as createBaseHttpClient } from './http-client.js';
+import { loadConfig } from './utils.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Re-export for backward compatibility
+export const createHttpClient = (baseUrl) => createBaseHttpClient(baseUrl, { defaultContentType: false });
 
-const CONFIG_PATH = path.join(__dirname, 'config.json');
-
-function loadConfig() {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    console.error('Config file not found. Please copy config.example.json to config.json and fill it in.');
-    process.exit(1);
-  }
-  try {
-    const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
-    const cfg = JSON.parse(raw);
-    if (!cfg.baseUrl || !cfg.apiKey) {
-      console.error('config.json must contain "baseUrl" and "apiKey".');
-      process.exit(1);
-    }
-    return cfg;
-  } catch (err) {
-    console.error('Failed to read config.json:', err.message);
-    process.exit(1);
-  }
-}
-
-function createHttpClient(baseUrl) {
-  const url = new URL(baseUrl);
-  const isHttps = url.protocol === 'https:';
-  const lib = isHttps ? https : http;
-
-  function request(method, pathName, { headers = {}, query = {}, body = null } = {}) {
-    const fullUrl = new URL(pathName, baseUrl);
-    Object.entries(query).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
-        fullUrl.searchParams.append(k, String(v));
-      }
-    });
-
-    const options = {
-      method,
-      hostname: fullUrl.hostname,
-      port: fullUrl.port || (isHttps ? 443 : 80),
-      path: fullUrl.pathname + fullUrl.search,
-      headers,
-      rejectUnauthorized: false, // allow self-signed if needed; adjust for your setup
-    };
-
-    return new Promise((resolve, reject) => {
-      const req = lib.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        res.on('end', () => {
-          let parsed = null;
-          try {
-            parsed = data ? JSON.parse(data) : null;
-          } catch {
-            // ignore JSON parse error, keep raw string
-          }
-          resolve({ status: res.statusCode, headers: res.headers, data: parsed ?? data });
-        });
-      });
-
-      req.on('error', (err) => reject(err));
-
-      if (body) {
-        const json = JSON.stringify(body);
-        req.setHeader('Content-Type', 'application/json');
-        req.setHeader('Content-Length', Buffer.byteLength(json));
-        req.write(json);
-      }
-
-      req.end();
-    });
-  }
-
-  return { request };
-}
-
-async function searchTitle(client, cfg, query, type, year) {
+export async function searchTitle(client, cfg, query, type, year) {
   const headers = {
     'X-Api-Key': cfg.apiKey,
   };
@@ -147,7 +68,7 @@ async function searchTitle(client, cfg, query, type, year) {
   return filtered;
 }
 
-async function createRequest(client, cfg, media) {
+export async function createRequest(client, cfg, media) {
   const headers = {
     'X-Api-Key': cfg.apiKey,
   };
@@ -183,7 +104,7 @@ function question(rl, prompt) {
   return new Promise((resolve) => rl.question(prompt, resolve));
 }
 
-function formatMedia(media) {
+export function formatMedia(media) {
   const title = media.title || media.name || 'Unknown';
   const date = media.releaseDate || media.firstAirDate || '';
   const year = date ? String(date).slice(0, 4) : '????';
@@ -192,7 +113,7 @@ function formatMedia(media) {
 }
 
 async function main() {
-  const cfg = loadConfig();
+  const cfg = loadConfig({ requireWaha: false });
   const client = createHttpClient(cfg.baseUrl);
   const rl = createReadline();
 
@@ -261,8 +182,8 @@ async function main() {
         '\nEnter the number of the item to request (or 0 to cancel): '
       );
       const pick = parseInt(pickInput.trim(), 10);
-      if (!pick || Number.isNaN(pick) || pick < 1 || pick > top.length) {
-        console.log('Cancelled.');
+      if (Number.isNaN(pick) || pick < 0 || pick > top.length) {
+        console.log(pick === 0 ? 'Cancelled.' : 'Invalid selection.');
         continue;
       }
 
@@ -304,5 +225,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   });
 }
-
 
