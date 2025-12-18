@@ -16,6 +16,10 @@
   "webhook": {
     "port": 3003,
     "path": "/webhook"
+  },
+  "logging": {
+    "level": "info",
+    "timestamps": false
   }
 }
 

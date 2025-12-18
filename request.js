@@ -19,11 +19,13 @@
 import readline from 'readline';
 import { createHttpClient as createBaseHttpClient } from './http-client.js';
 import { loadConfig } from './utils.js';
+import { createLogger } from './logger.js';
 
 // Re-export for backward compatibility
 export const createHttpClient = (baseUrl) => createBaseHttpClient(baseUrl, { defaultContentType: false });
 
-export async function searchTitle(client, cfg, query, type, year) {
+export async function searchTitle(client, cfg, query, type, year, logger = null) {
+  logger?.debug('Searching title', { query, type, year });
   const headers = {
     'X-Api-Key': cfg.jellyseerr.apiKey,
   };
@@ -82,6 +84,7 @@ export async function searchTitle(client, cfg, query, type, year) {
  * @returns {Promise<Object>} Media details
  */
 export async function getMediaDetails(client, cfg, mediaId, mediaType) {
+  // Called by the bot; keep any deep logging at debug level in the caller.
   const headers = {
     'X-Api-Key': cfg.jellyseerr.apiKey,
   };
@@ -100,7 +103,7 @@ export async function getMediaDetails(client, cfg, mediaId, mediaType) {
   return res.data;
 }
 
-export async function createRequest(client, cfg, media, seasons = null) {
+export async function createRequest(client, cfg, media, seasons = null, logger = null) {
   const headers = {
     'X-Api-Key': cfg.jellyseerr.apiKey,
   };
@@ -135,6 +138,7 @@ export async function createRequest(client, cfg, media, seasons = null) {
     body.serverId = cfg.jellyseerr.defaultServer;
   }
 
+  logger?.debug('Creating request', { path: 'request', body });
   const res = await client.request('POST', 'request', {
     headers,
     body,
@@ -165,6 +169,9 @@ export function formatMedia(media) {
 async function main() {
   const cfg = loadConfig({ requireWaha: false });
   const client = createHttpClient(cfg.jellyseerr.apiBaseUrl);
+  const logger = createLogger(cfg);
+  logger.info('🎬 Jellyseerr Interactive Requester');
+  logger.info(`🔗 Jellyseerr: ${cfg.jellyseerr.baseUrl}`);
   const rl = createReadline();
 
   try {
@@ -197,18 +204,17 @@ async function main() {
       );
       const year = yearInput.trim() ? parseInt(yearInput.trim(), 10) || null : null;
 
-      console.log(`\nSearching Jellyseerr for "${title}"...`);
+      logger.info(`\n🔍 Searching for: "${title}"`);
 
       let candidates;
       try {
-        candidates = await searchTitle(client, cfg, title, type, year);
+        candidates = await searchTitle(client, cfg, title, type, year, logger);
       } catch (err) {
-        console.error(`Error searching for "${title}":`, err.message);
+        logger.error(`Search failed for "${title}"`, err?.message || err);
         if (err.response) {
-          console.error('Search error status:', err.response.status);
-          console.error('Search error body:', err.response.data);
+          logger.debug('Search error response', { status: err.response.status, body: err.response.data });
         } else if (err.stack) {
-          console.error(err.stack);
+          logger.debug('Search error stack', err.stack);
         }
         continue;
       }
@@ -239,44 +245,41 @@ async function main() {
 
       const chosen = top[pick - 1];
       const { title: chosenTitle, year: chosenYear, typeStr } = formatMedia(chosen);
-      console.log(`\nRequesting ${typeStr}: "${chosenTitle}" (${chosenYear}) ...`);
+      logger.info(`\n📨 Requesting ${typeStr}: "${chosenTitle}" (${chosenYear})`);
 
       try {
-        const res = await createRequest(client, cfg, chosen);
+        const res = await createRequest(client, cfg, chosen, null, logger);
         if (res.status === 201 || res.status === 200) {
-          console.log('Request created successfully.');
+          logger.info('✅ Request created successfully.');
         } else if (res.status === 409) {
           // Check response data to determine specific status
           const data = res.data || {};
           
           if (data.status === 'available' || data.mediaStatus === 'available' || 
               data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
-            console.log('✅ Media is already available in your library!');
+            logger.info('✅ Already available in your library.');
           } else if (data.status === 'pending' || data.status === 'approved' || 
                      data.mediaStatus === 'pending' || data.mediaStatus === 'approved' ||
                      data.media?.status === 'pending' || data.media?.status === 'approved' ||
                      data.media?.mediaStatus === 'pending' || data.media?.mediaStatus === 'approved') {
-            console.log('⏳ Media is already requested and pending approval.');
+            logger.info('⏳ Already requested and pending approval.');
           } else if (data.request || data.media?.request) {
-            console.log('📋 Media is already requested.');
+            logger.info('📋 Already requested.');
           } else {
-            console.log('Media is already requested or available.');
+            logger.info('ℹ️ Already requested or available.');
           }
           
-          if (res.data) {
-            console.log('Details:', res.data);
-          }
+          logger.debug('409 response details', res.data);
         } else {
-          console.error('Unexpected response from Jellyseerr:', res.status);
-          console.error('Response body:', res.data);
+          logger.error(`Unexpected response status: ${res.status}`);
+          logger.debug('Unexpected response body', res.data);
         }
       } catch (err) {
-        console.error('Failed to create request:', err.message);
+        logger.error('Failed to create request', err?.message || err);
         if (err.response) {
-          console.error('Request error status:', err.response.status);
-          console.error('Request error body:', err.response.data);
+          logger.debug('Request error response', { status: err.response.status, body: err.response.data });
         } else if (err.stack) {
-          console.error(err.stack);
+          logger.debug('Request error stack', err.stack);
         }
       }
     }

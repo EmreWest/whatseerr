@@ -21,6 +21,7 @@ cp config.example.json config.json
    - `waha.session`: WAHA session name (default: "default")
    - `webhook.port`: port for webhook server
    - `webhook.path`: webhook path (example: `/webhook`)
+   - `logging.level`: `info` (default) or `debug`
 
 ### Running CLI Version
 

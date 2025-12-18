@@ -11,6 +11,7 @@ import http from 'http';
 import { createHttpClient, searchTitle, createRequest, formatMedia, getMediaDetails } from './request.js';
 import { createWahaClient, sendText } from './waha-client.js';
 import { loadConfig, getWebhookUrl } from './utils.js';
+import { createLogger } from './logger.js';
 
 // Constants
 const SEARCH_COMMAND = '/request';
@@ -174,18 +175,18 @@ function getRequestStatusMessage(res, typeStr) {
  * Handles incoming WhatsApp messages
  */
 async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
+  const logger = cfg.__logger;
   try {
     // Extract message data from WAHA webhook payload
     const payload = webhookData.payload;
     if (!payload) {
-      console.log('[WARN] No payload in webhook data');
-      console.log('[DEBUG] Webhook data keys:', Object.keys(webhookData));
+      logger?.warn('Webhook received with no payload', { keys: Object.keys(webhookData || {}) });
       return;
     }
 
     // Only process incoming messages (not sent by us)
     if (payload.fromMe) {
-      console.log('[INFO] Ignoring message from self (fromMe: true)');
+      logger?.debug('Ignoring message from self (fromMe: true)');
       return;
     }
 
@@ -210,26 +211,29 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       }
     }
 
-    console.log('[DEBUG] Message details:');
-    console.log('  - Chat ID:', chatId);
-    console.log('  - Message ID:', messageId);
-    console.log('  - Message text:', messageText);
-    console.log('  - fromMe:', payload.fromMe);
-    console.log('  - to:', payload.to);
+    logger?.debug('Incoming message details', {
+      chatId,
+      messageId,
+      messageText,
+      fromMe: payload.fromMe,
+      to: payload.to,
+      event: webhookData.event,
+      session: webhookData.session,
+    });
 
     if (!messageText) {
-      console.log('[WARN] Empty message text, ignoring');
+      logger?.warn('Empty message text, ignoring');
       return;
     }
 
-    console.log(`[INFO] Received message from ${chatId}: "${messageText}"`);
+    logger?.info(`📩 Message from ${chatId}: ${messageText}`);
 
     // Check if user is selecting seasons for a TV show
     if (pendingTvSelections.has(chatId)) {
       const tvShow = pendingTvSelections.get(chatId);
       const { title: chosenTitle } = formatMedia(tvShow);
       
-      console.log(`[INFO] User ${chatId} is selecting seasons for TV show: "${chosenTitle}"`);
+      logger?.info(`📺 Season selection for: "${chosenTitle}"`);
       
       // Parse season selection - use actual seasons array length
       const availableSeasons = tvShow.seasons || [];
@@ -237,7 +241,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       const seasonSelection = parseSeasonSelection(messageText, maxSeasons);
       
       if (seasonSelection.cancelled) {
-        console.log('[INFO] User cancelled season selection');
+        logger?.info('🚫 Cancelled season selection');
         pendingTvSelections.delete(chatId);
         userSearchResults.delete(chatId);
         await sendText(wahaClient, cfg, chatId, 'Cancelled. Send /request <name> to search again.');
@@ -253,13 +257,12 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       const seasons = seasonSelection.seasons;
       const seasonsText = seasons.length === maxSeasons ? 'all seasons' : `season${seasons.length > 1 ? 's' : ''} ${seasons.join(', ')}`;
       
-      console.log(`[INFO] Creating request for TV show "${chosenTitle}" with ${seasonsText}`);
+      logger?.info(`📨 Requesting "${chosenTitle}" (${seasonsText})`);
       await sendText(wahaClient, cfg, chatId, `Requesting "${chosenTitle}" - ${seasonsText}...`);
       
       try {
-        const res = await createRequest(jellyseerrClient, cfg, tvShow, seasons);
-        console.log(`[INFO] Jellyseerr request response status: ${res.status}`);
-        console.log('[DEBUG] Jellyseerr response data:', JSON.stringify(res.data, null, 2));
+        const res = await createRequest(jellyseerrClient, cfg, tvShow, seasons, logger);
+        logger?.debug('Create request response', { status: res.status, data: res.data });
         
         const statusMessage = getRequestStatusMessage(res, 'TV');
         
@@ -278,9 +281,10 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         }
         
         await sendText(wahaClient, cfg, chatId, statusMessage);
+        logger?.info(`✅ Sent status to ${chatId}`);
       } catch (err) {
-        console.error('[ERROR] Failed to create request:', err);
-        console.error('[ERROR] Stack:', err.stack);
+        logger?.error('Failed to create request', err?.message || err);
+        logger?.debug('Request error stack', err?.stack);
         await sendText(wahaClient, cfg, chatId, `❌ Error creating request: ${err.message}`);
       }
       
@@ -293,14 +297,14 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     // Check if message is a number (selection from previous search)
     const selectionNumber = parseInt(messageText, 10);
     if (!isNaN(selectionNumber) && userSearchResults.has(chatId)) {
-      console.log(`[INFO] User ${chatId} selected number: ${selectionNumber}`);
+      logger?.info(`🔢 Selection from ${chatId}: ${selectionNumber}`);
       // User is selecting from previous results
       const results = userSearchResults.get(chatId);
-      console.log(`[DEBUG] User has ${results.length} stored results`);
+      logger?.debug('Stored result count', { chatId, count: results.length });
       
       // Handle cancel (option 0)
       if (selectionNumber === 0) {
-        console.log('[INFO] User cancelled selection');
+        logger?.info('🚫 Cancelled selection');
         userSearchResults.delete(chatId);
         await sendText(wahaClient, cfg, chatId, 'Cancelled. Send /request <name> to search again.');
         return;
@@ -313,19 +317,20 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
         // For TV shows, fetch details and show season selection
         if (isTvShow) {
-          console.log(`[INFO] TV show selected: "${chosenTitle}" - fetching season details...`);
+          logger?.info(`📺 TV selected: "${chosenTitle}" — fetching seasons...`);
           await sendText(wahaClient, cfg, chatId, `Fetching season information for "${chosenTitle}"...`);
           
           try {
             const mediaDetails = await getMediaDetails(jellyseerrClient, cfg, chosen.id, 2);
             const seasons = mediaDetails.seasons || [];
+            logger?.debug('TV media details seasons', { seasonCount: seasons.length });
             
             if (seasons.length === 0) {
               // No season info available, request all seasons
-              console.log('[WARN] No season information available, requesting all seasons');
+              logger?.warn('No season info returned; requesting all seasons');
               await sendText(wahaClient, cfg, chatId, `No season details found. Requesting all seasons for "${chosenTitle}"...`);
               
-              const res = await createRequest(jellyseerrClient, cfg, chosen);
+              const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
               const statusMessage = getRequestStatusMessage(res, typeStr);
               await sendText(wahaClient, cfg, chatId, statusMessage);
               
@@ -344,16 +349,16 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
             // Keep search results in case user wants to cancel and pick something else
             return;
           } catch (err) {
-            console.error('[ERROR] Failed to get media details:', err);
+            logger?.error('Failed to get TV media details', err?.message || err);
             await sendText(wahaClient, cfg, chatId, `❌ Error fetching season information: ${err.message}. Requesting all seasons...`);
             
             // Fallback: request all seasons
             try {
-              const res = await createRequest(jellyseerrClient, cfg, chosen);
+              const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
               const statusMessage = getRequestStatusMessage(res, typeStr);
               await sendText(wahaClient, cfg, chatId, statusMessage);
             } catch (reqErr) {
-              console.error('[ERROR] Failed to create request:', reqErr);
+              logger?.error('Fallback request failed', reqErr?.message || reqErr);
               await sendText(wahaClient, cfg, chatId, `❌ Error creating request: ${reqErr.message}`);
             }
             
@@ -363,17 +368,14 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         }
         
         // For movies, create request directly
-        console.log(`[INFO] Creating request for: ${typeStr} "${chosenTitle}" (${chosenYear})`);
+        logger?.info(`📨 Requesting ${typeStr}: "${chosenTitle}" (${chosenYear})`);
 
         // Send confirmation
-        console.log('[DEBUG] Sending confirmation message...');
         await sendText(wahaClient, cfg, chatId, `Requesting ${typeStr}: "${chosenTitle}" (${chosenYear})...`);
 
         try {
-          console.log('[DEBUG] Calling createRequest...');
-          const res = await createRequest(jellyseerrClient, cfg, chosen);
-          console.log(`[INFO] Jellyseerr request response status: ${res.status}`);
-          console.log('[DEBUG] Jellyseerr response data:', JSON.stringify(res.data, null, 2));
+          const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
+          logger?.debug('Create request response', { status: res.status, data: res.data });
           
           const statusMessage = getRequestStatusMessage(res, typeStr);
           
@@ -394,18 +396,18 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           
           await sendText(wahaClient, cfg, chatId, statusMessage);
         } catch (err) {
-          console.error('[ERROR] Failed to create request:', err);
-          console.error('[ERROR] Stack:', err.stack);
+          logger?.error('Failed to create request', err?.message || err);
+          logger?.debug('Request error stack', err?.stack);
           await sendText(wahaClient, cfg, chatId, `❌ Error creating request: ${err.message}`);
         }
 
         // Clear stored results
         userSearchResults.delete(chatId);
-        console.log('[DEBUG] Cleared stored results for user');
+        logger?.debug('Cleared stored results for user', { chatId });
         return;
       } else {
         // Invalid selection number
-        console.log(`[WARN] Invalid selection number ${selectionNumber}, valid range: 0-${results.length}`);
+        logger?.warn(`Invalid selection number ${selectionNumber}`, { validRange: `0-${results.length}` });
         await sendText(wahaClient, cfg, chatId, `Invalid selection. Please reply with a number between 0 and ${results.length} (0 to cancel).`);
         return;
       }
@@ -414,23 +416,19 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     // Check if message starts with /request command
     const query = extractSearchQuery(messageText);
     if (!query) {
-      console.log(`[WARN] Message does not start with "${SEARCH_COMMAND}" command`);
-      console.log(`[DEBUG] Message was: "${messageText}"`);
+      logger?.warn(`Message does not start with "${SEARCH_COMMAND}"`, { messageText });
       await sendText(wahaClient, cfg, chatId, `Please use "${SEARCH_COMMAND}" command to search.\n\nExample: ${SEARCH_COMMAND} The Matrix`);
       return;
     }
 
-    console.log(`[INFO] Extracted search query: "${query}"`);
-    console.log(`[INFO] Searching Jellyseerr for: "${query}"`);
+    logger?.info(`🔍 Searching: "${query}"`);
 
     // Send searching message
-    console.log('[DEBUG] Sending "Searching..." message...');
     await sendText(wahaClient, cfg, chatId, `Searching for "${query}"...`);
 
     try {
-      console.log('[DEBUG] Calling searchTitle...');
-      const candidates = await searchTitle(jellyseerrClient, cfg, query, null, null);
-      console.log(`[INFO] Search returned ${candidates?.length || 0} results`);
+      const candidates = await searchTitle(jellyseerrClient, cfg, query, null, null, logger);
+      logger?.debug('Search result count', { count: candidates?.length || 0 });
 
       if (!candidates || candidates.length === 0) {
         console.log(`[INFO] No results found for "${query}"`);
@@ -441,25 +439,23 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
       // Store results for this user
       userSearchResults.set(chatId, candidates);
-      console.log(`[INFO] Stored ${candidates.length} results for user ${chatId}`);
+      logger?.debug('Stored results', { chatId, count: candidates.length });
 
       // Format and send results
       const resultsMessage = formatSearchResults(candidates);
-      console.log('[DEBUG] Sending results message...');
-      console.log('[DEBUG] Results message preview:', resultsMessage.substring(0, 200) + '...');
       await sendText(wahaClient, cfg, chatId, resultsMessage);
-      console.log('[SUCCESS] Results sent to user');
+      logger?.info(`📤 Sent results to ${chatId}`);
 
     } catch (err) {
-      console.error(`[ERROR] Error searching for "${query}":`, err);
-      console.error('[ERROR] Stack:', err.stack);
+      logger?.error(`Error searching for "${query}"`, err?.message || err);
+      logger?.debug('Search error stack', err?.stack);
       await sendText(wahaClient, cfg, chatId, `❌ Error searching: ${err.message}`);
       userSearchResults.delete(chatId);
     }
 
   } catch (err) {
-    console.error('[ERROR] Error handling message:', err);
-    console.error('[ERROR] Stack:', err.stack);
+    logger?.error('Error handling message', err?.message || err);
+    logger?.debug('Handler error stack', err?.stack);
   }
 }
 
@@ -469,6 +465,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
   const port = cfg.webhook.port;
   const path = cfg.webhook.path;
+  const logger = cfg.__logger;
 
   const server = http.createServer(async (req, res) => {
     // Only handle POST requests to the webhook path
@@ -489,7 +486,7 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
       return;
     }
 
-    console.log(`[INFO] Webhook POST received: ${req.url}`);
+    logger?.debug('Webhook POST received', { url: req.url });
 
     // Set CORS headers (if needed)
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -506,9 +503,9 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
         const webhookData = JSON.parse(body);
         
         if (webhookData.event) {
-          console.log(`[INFO] Webhook event: ${webhookData.event} (session: ${webhookData.session || 'unknown'})`);
+          logger?.debug('Webhook event received', { event: webhookData.event, session: webhookData.session || 'unknown' });
         } else {
-          console.log('[WARN] Webhook data has no event field');
+          logger?.warn('Webhook data has no event field');
         }
 
         // Process message events - prefer 'message.any' to avoid duplicates
@@ -517,8 +514,8 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
         if (webhookData.event === 'message.any' && webhookData.payload) {
           // Process message asynchronously (don't block response)
           handleMessage(cfg, jellyseerrClient, wahaClient, webhookData).catch((err) => {
-            console.error('[ERROR] Error in handleMessage:', err);
-            console.error('[ERROR] Stack:', err.stack);
+            logger?.error('Error in handleMessage', err?.message || err);
+            logger?.debug('handleMessage stack', err?.stack);
           });
         } else if (webhookData.event === 'message' && webhookData.payload) {
           // Only process 'message' event if we don't have 'message.any' configured
@@ -526,11 +523,11 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
           const messageId = webhookData.payload?.id;
           if (messageId && !processedMessages.has(messageId)) {
             handleMessage(cfg, jellyseerrClient, wahaClient, webhookData).catch((err) => {
-              console.error('[ERROR] Error in handleMessage:', err);
-              console.error('[ERROR] Stack:', err.stack);
+              logger?.error('Error in handleMessage', err?.message || err);
+              logger?.debug('handleMessage stack', err?.stack);
             });
           } else {
-            console.log(`[INFO] Skipping duplicate 'message' event (ID: ${messageId})`);
+            logger?.debug('Skipping duplicate message event', { messageId });
           }
         }
 
@@ -539,9 +536,9 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
         res.end(JSON.stringify({ received: true }));
 
       } catch (err) {
-        console.error('[ERROR] Error parsing webhook data:', err.message);
+        logger?.error('Error parsing webhook JSON', err?.message || err);
         if (body.length < MAX_ERROR_BODY_LENGTH) {
-          console.error('[ERROR] Raw body:', body);
+          logger?.debug('Webhook raw body', body);
         }
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Invalid JSON', message: err.message }));
@@ -549,32 +546,33 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
     });
 
     req.on('error', (err) => {
-      console.error('[ERROR] Request error:', err);
-      console.error('[ERROR] Stack:', err.stack);
+      logger?.error('Webhook request stream error', err?.message || err);
+      logger?.debug('Webhook request error stack', err?.stack);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Internal server error' }));
     });
   });
 
   server.listen(port, () => {
-    console.log(`[INFO] WhatsApp bot webhook server listening on port ${port}`);
-    console.log(`[INFO] Webhook path: ${path}`);
+    logger?.info(`🚀 Webhook server listening`);
+    logger?.info(`📍 Path: ${path}`);
+    logger?.info(`🔌 Port: ${port}`);
     try {
       const webhookUrl = getWebhookUrl(cfg);
-      console.log(`[INFO] Configure WAHA to send webhooks to: ${webhookUrl}`);
+      logger?.info(`🔗 WAHA webhook URL: ${webhookUrl}`);
     } catch {
-      console.log('[WARN] protocol/host is not set in config.json, so the bot cannot print a public webhook URL. Set protocol + host, or configure the WAHA webhook URL manually.');
+      logger?.warn('protocol/host not set; cannot print public webhook URL. Set protocol + host, or configure WAHA manually.');
     }
-    console.log(`[INFO] Command: ${SEARCH_COMMAND} <movie or TV show name>`);
-    console.log(`[INFO] Example: ${SEARCH_COMMAND} The Matrix`);
+    logger?.info(`💬 Command: ${SEARCH_COMMAND} <movie or TV show name>`);
+    logger?.info(`🧪 Example: ${SEARCH_COMMAND} The Matrix`);
   });
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`[ERROR] Port ${port} is already in use. Please choose a different port.`);
+      logger?.error(`Port ${port} is already in use. Choose a different webhook.port.`);
     } else {
-      console.error('[ERROR] Server error:', err);
-      console.error('[ERROR] Stack:', err.stack);
+      logger?.error('Server error', err?.message || err);
+      logger?.debug('Server error stack', err?.stack);
     }
     process.exit(1);
   });
@@ -587,13 +585,15 @@ function createWebhookServer(cfg, jellyseerrClient, wahaClient) {
  */
 async function main() {
   const cfg = loadConfig({ requireWaha: true, requireWebhook: true });
+  cfg.__logger = createLogger(cfg);
+  const logger = cfg.__logger;
   const jellyseerrClient = createHttpClient(cfg.jellyseerr.apiBaseUrl);
   const wahaClient = createWahaClient(cfg.waha.baseUrl);
 
-  console.log('[INFO] Starting WhatsApp bot for Jellyseerr...');
-  console.log(`[INFO] Jellyseerr: ${cfg.jellyseerr.baseUrl}`);
-  console.log(`[INFO] WAHA: ${cfg.waha.baseUrl}`);
-  console.log(`[INFO] WAHA Session: ${cfg.waha?.session || 'default'}`);
+  logger.info('🤖 Starting WhatsApp bot...');
+  logger.info(`🔗 Jellyseerr: ${cfg.jellyseerr.baseUrl}`);
+  logger.info(`🔗 WAHA: ${cfg.waha.baseUrl}`);
+  logger.info(`🧩 WAHA Session: ${cfg.waha?.session || 'default'}`);
 
   const server = createWebhookServer(cfg, jellyseerrClient, wahaClient);
 
