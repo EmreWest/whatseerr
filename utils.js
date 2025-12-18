@@ -13,12 +13,65 @@ const __dirname = path.dirname(__filename);
 
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
+function buildBaseUrl({ protocol, host, port }) {
+  if (!protocol || !host || !port) return null;
+  return `${protocol}://${host}:${port}`;
+}
+
+function normalizeConfig(rawCfg) {
+  const cfg = { ...rawCfg };
+
+  // Detect legacy schema (top-level baseUrl/apiKey)
+  const hasLegacyJellyseerr = typeof cfg.baseUrl === 'string' || typeof cfg.apiKey === 'string';
+
+  // If jellyseerr object is missing, build it from legacy keys.
+  if (!cfg.jellyseerr) {
+    cfg.jellyseerr = {};
+  }
+
+  if (!cfg.jellyseerr.baseUrl && typeof cfg.baseUrl === 'string') {
+    cfg.jellyseerr.baseUrl = cfg.baseUrl;
+  }
+  if (!cfg.jellyseerr.apiKey && typeof cfg.apiKey === 'string') {
+    cfg.jellyseerr.apiKey = cfg.apiKey;
+  }
+  if (cfg.jellyseerr.defaultUserId === undefined && cfg.defaultUserId !== undefined) {
+    cfg.jellyseerr.defaultUserId = cfg.defaultUserId;
+  }
+  if (cfg.jellyseerr.defaultServer === undefined && cfg.defaultServer !== undefined) {
+    cfg.jellyseerr.defaultServer = cfg.defaultServer;
+  }
+
+  // Ensure waha object exists.
+  if (!cfg.waha) {
+    cfg.waha = {};
+  }
+
+  // If using new-style host+port, derive base URLs (but do not override explicit baseUrl).
+  if (!cfg.jellyseerr.baseUrl && cfg.protocol && cfg.host && cfg.jellyseerr?.port) {
+    cfg.jellyseerr.baseUrl = buildBaseUrl({ protocol: cfg.protocol, host: cfg.host, port: cfg.jellyseerr.port });
+  }
+  if (!cfg.waha.baseUrl && cfg.protocol && cfg.host && cfg.waha?.port) {
+    cfg.waha.baseUrl = buildBaseUrl({ protocol: cfg.protocol, host: cfg.host, port: cfg.waha.port });
+  }
+
+  // Back-compat: if caller code still references legacy keys, keep them aligned.
+  if (hasLegacyJellyseerr || cfg.jellyseerr?.baseUrl) {
+    cfg.baseUrl = cfg.jellyseerr.baseUrl;
+    cfg.apiKey = cfg.jellyseerr.apiKey;
+    cfg.defaultUserId = cfg.jellyseerr.defaultUserId;
+    cfg.defaultServer = cfg.jellyseerr.defaultServer;
+  }
+
+  return cfg;
+}
+
 /**
  * Loads and validates configuration from config.json
  * @param {Object} options - Options for config loading
  * @param {boolean} options.requireWaha - Whether WAHA config is required
  * @param {boolean} options.requireWebhook - Whether webhook config is required
- * @param {boolean} options.requireWebhookHost - Whether webhook.host is required
+ * @param {boolean} options.requireWebhookHost - Whether protocol+host are required to build a public webhook URL
  * @returns {Object} Configuration object
  */
 export function loadConfig(options = {}) {
@@ -31,15 +84,15 @@ export function loadConfig(options = {}) {
 
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
-    const cfg = JSON.parse(raw);
+    const cfg = normalizeConfig(JSON.parse(raw));
 
-    if (!cfg.baseUrl || !cfg.apiKey) {
-      console.error('[FATAL] config.json must contain "baseUrl" and "apiKey" for Jellyseerr.');
+    if (!cfg.jellyseerr?.baseUrl || !cfg.jellyseerr?.apiKey) {
+      console.error('[FATAL] config.json must contain Jellyseerr config: either { "jellyseerr": { "baseUrl", "apiKey" } } or { "protocol", "host", "jellyseerr": { "port", "apiKey" } }.');
       process.exit(1);
     }
 
     if (requireWaha && !cfg.waha?.baseUrl) {
-      console.error('[FATAL] config.json must contain "waha.baseUrl" for WAHA API.');
+      console.error('[FATAL] config.json must contain WAHA config: either { "waha": { "baseUrl" } } or { "protocol", "host", "waha": { "port" } }.');
       process.exit(1);
     }
 
@@ -55,8 +108,12 @@ export function loadConfig(options = {}) {
     }
 
     if (requireWebhookHost) {
-      if (!cfg.webhook?.host || typeof cfg.webhook.host !== 'string') {
-        console.error('[FATAL] config.json must contain "webhook.host" (string).');
+      if (!cfg.protocol || typeof cfg.protocol !== 'string') {
+        console.error('[FATAL] config.json must contain "protocol" (string), e.g. "http" or "https".');
+        process.exit(1);
+      }
+      if (!cfg.host || typeof cfg.host !== 'string') {
+        console.error('[FATAL] config.json must contain "host" (string), e.g. "192.168.1.10".');
         process.exit(1);
       }
     }
@@ -71,16 +128,17 @@ export function loadConfig(options = {}) {
 /**
  * Gets the webhook URL from config, with optional host override
  * @param {Object} cfg - Configuration object
- * @param {string} hostOverride - Optional host override (if provided, takes precedence over webhook.host)
+ * @param {string} hostOverride - Optional host override (if provided, takes precedence over config.host)
  * @returns {string} Webhook URL
  */
 export function getWebhookUrl(cfg, hostOverride = null) {
-  const host = hostOverride || cfg.webhook?.host;
+  const protocol = cfg.protocol;
+  const host = hostOverride || cfg.host;
   const port = cfg.webhook?.port;
   const webhookPath = cfg.webhook?.path;
-  if (!host || !port || !webhookPath) {
-    throw new Error('Missing webhook config: expected webhook.host, webhook.port, webhook.path in config.json');
+  if (!protocol || !host || !port || !webhookPath) {
+    throw new Error('Missing webhook config: expected protocol, host, webhook.port, webhook.path in config.json');
   }
-  return `http://${host}:${port}${webhookPath}`;
+  return `${protocol}://${host}:${port}${webhookPath}`;
 }
 

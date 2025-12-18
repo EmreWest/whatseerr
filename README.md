@@ -12,14 +12,15 @@ cp config.example.json config.json
 ```
 
 3. Edit `config.json` and set:
-   - `baseUrl`: your Jellyseerr URL, e.g. `http://localhost:5055` or `https://jellyseerr.example.com`
-   - `apiKey`: the API key you copied
-   - `waha.baseUrl`: your WAHA API URL (e.g., `http://localhost:8584` or `http://YOUR_WAHA_HOST:8584`)
+   - `protocol`: `http` or `https`
+   - `host`: hostname/IP shared by Jellyseerr + WAHA + the bot webhook (example: `192.168.1.8`)
+   - `jellyseerr.port`: Jellyseerr port (example: `5055`)
+   - `jellyseerr.apiKey`: the API key you copied
+   - `waha.port`: WAHA port (example: `8584`)
    - `waha.apiKey`: your WAHA API key
    - `waha.session`: WAHA session name (default: "default")
-   - `webhook.host`: host/IP WAHA should call (required if you use `npm run configure-webhook`; example: `192.168.1.10`)
-   - `webhook.port`: port for webhook server (required)
-   - `webhook.path`: webhook path (required; example: `/webhook`)
+   - `webhook.port`: port for webhook server
+   - `webhook.path`: webhook path (example: `/webhook`)
 
 ### Running CLI Version
 
@@ -58,7 +59,7 @@ The script will:
    Option B - Manual configuration:
    - Open your WAHA dashboard (e.g., `http://localhost:8584`)
    - Navigate to session settings
-   - Add webhook URL: `http://YOUR_SERVER_IP:3003/webhook` (adjust IP and port as needed)
+   - Add webhook URL: `http(s)://<host>:<webhook.port><webhook.path>` (adjust as needed)
    - Enable events: `message`, `message.any`
 
 3. **Usage via WhatsApp:**

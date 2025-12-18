@@ -12,8 +12,8 @@
  * Before using:
  *   1. Copy config.example.json to config.json
  *   2. Set:
- *        - baseUrl: e.g. http://localhost:5055
- *        - apiKey: Your Jellyseerr API key (Settings -> General)
+ *        - protocol + host
+ *        - jellyseerr.port + jellyseerr.apiKey
  */
 
 import readline from 'readline';
@@ -25,7 +25,7 @@ export const createHttpClient = (baseUrl) => createBaseHttpClient(baseUrl, { def
 
 export async function searchTitle(client, cfg, query, type, year) {
   const headers = {
-    'X-Api-Key': cfg.apiKey,
+    'X-Api-Key': cfg.jellyseerr.apiKey,
   };
 
   // Overseerr/Jellyseerr expects the `query` parameter to be URL-encoded already.
@@ -78,7 +78,7 @@ export async function searchTitle(client, cfg, query, type, year) {
  */
 export async function getMediaDetails(client, cfg, mediaId, mediaType) {
   const headers = {
-    'X-Api-Key': cfg.apiKey,
+    'X-Api-Key': cfg.jellyseerr.apiKey,
   };
 
   const typePath = mediaType === 1 ? 'movie' : 'tv';
@@ -97,7 +97,7 @@ export async function getMediaDetails(client, cfg, mediaId, mediaType) {
 
 export async function createRequest(client, cfg, media, seasons = null) {
   const headers = {
-    'X-Api-Key': cfg.apiKey,
+    'X-Api-Key': cfg.jellyseerr.apiKey,
   };
 
   const body = {
@@ -110,11 +110,11 @@ export async function createRequest(client, cfg, media, seasons = null) {
     body.seasons = seasons;
   }
 
-  if (cfg.defaultUserId) {
-    body.requestedByUserId = cfg.defaultUserId;
+  if (cfg.jellyseerr.defaultUserId) {
+    body.requestedByUserId = cfg.jellyseerr.defaultUserId;
   }
-  if (cfg.defaultServer) {
-    body.serverId = cfg.defaultServer;
+  if (cfg.jellyseerr.defaultServer) {
+    body.serverId = cfg.jellyseerr.defaultServer;
   }
 
   const res = await client.request('POST', '/api/v1/request', {
@@ -146,7 +146,7 @@ export function formatMedia(media) {
 
 async function main() {
   const cfg = loadConfig({ requireWaha: false });
-  const client = createHttpClient(cfg.baseUrl);
+  const client = createHttpClient(cfg.jellyseerr.baseUrl);
   const rl = createReadline();
 
   try {
