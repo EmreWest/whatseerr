@@ -62,6 +62,47 @@ function extractSearchQuery(messageText) {
 }
 
 /**
+ * Determines the status message for request responses
+ * @param {Object} res - Response object from Jellyseerr API
+ * @param {string} typeStr - Media type string (Movie/TV)
+ * @returns {string} Status message
+ */
+function getRequestStatusMessage(res, typeStr) {
+  if (res.status === 201 || res.status === 200) {
+    return `✅ Request created successfully!`;
+  }
+
+  if (res.status === 409) {
+    // Check response data to determine if it's already requested or available
+    const data = res.data || {};
+    
+    // Check for status fields that indicate availability
+    if (data.status === 'available' || data.mediaStatus === 'available' || 
+        data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
+      return `✅ This ${typeStr.toLowerCase()} is already available in your library!`;
+    }
+    
+    // Check for status fields that indicate it's requested but not available
+    if (data.status === 'pending' || data.status === 'approved' || 
+        data.mediaStatus === 'pending' || data.mediaStatus === 'approved' ||
+        data.media?.status === 'pending' || data.media?.status === 'approved' ||
+        data.media?.mediaStatus === 'pending' || data.media?.mediaStatus === 'approved') {
+      return `⏳ This ${typeStr.toLowerCase()} is already requested and pending approval.`;
+    }
+    
+    // Check if there's a request object indicating it's already requested
+    if (data.request || data.media?.request) {
+      return `📋 This ${typeStr.toLowerCase()} is already requested.`;
+    }
+    
+    // Default message if we can't determine the specific status
+    return `ℹ️ This ${typeStr.toLowerCase()} is already requested or available.`;
+  }
+
+  return `❌ Failed to create request. Status: ${res.status}`;
+}
+
+/**
  * Handles incoming WhatsApp messages
  */
 async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
@@ -147,16 +188,24 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           console.log(`[INFO] Jellyseerr request response status: ${res.status}`);
           console.log('[DEBUG] Jellyseerr response data:', JSON.stringify(res.data, null, 2));
           
+          const statusMessage = getRequestStatusMessage(res, typeStr);
+          
           if (res.status === 201 || res.status === 200) {
             console.log('[SUCCESS] Request created successfully');
-            await sendText(wahaClient, cfg, chatId, `✅ Request created successfully!`);
           } else if (res.status === 409) {
-            console.log('[INFO] Request already exists');
-            await sendText(wahaClient, cfg, chatId, `ℹ️ This ${typeStr.toLowerCase()} is already requested or available.`);
+            // Determine specific status for logging
+            const data = res.data || {};
+            if (data.status === 'available' || data.mediaStatus === 'available' || 
+                data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
+              console.log('[INFO] Media is already available');
+            } else {
+              console.log('[INFO] Media is already requested');
+            }
           } else {
             console.error('[ERROR] Unexpected response from Jellyseerr:', res.status, res.data);
-            await sendText(wahaClient, cfg, chatId, `❌ Failed to create request. Status: ${res.status}`);
           }
+          
+          await sendText(wahaClient, cfg, chatId, statusMessage);
         } catch (err) {
           console.error('[ERROR] Failed to create request:', err);
           console.error('[ERROR] Stack:', err.stack);

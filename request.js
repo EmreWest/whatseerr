@@ -196,7 +196,23 @@ async function main() {
         if (res.status === 201 || res.status === 200) {
           console.log('Request created successfully.');
         } else if (res.status === 409) {
-          console.log('Media is already requested or available.');
+          // Check response data to determine specific status
+          const data = res.data || {};
+          
+          if (data.status === 'available' || data.mediaStatus === 'available' || 
+              data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
+            console.log('✅ Media is already available in your library!');
+          } else if (data.status === 'pending' || data.status === 'approved' || 
+                     data.mediaStatus === 'pending' || data.mediaStatus === 'approved' ||
+                     data.media?.status === 'pending' || data.media?.status === 'approved' ||
+                     data.media?.mediaStatus === 'pending' || data.media?.mediaStatus === 'approved') {
+            console.log('⏳ Media is already requested and pending approval.');
+          } else if (data.request || data.media?.request) {
+            console.log('📋 Media is already requested.');
+          } else {
+            console.log('Media is already requested or available.');
+          }
+          
           if (res.data) {
             console.log('Details:', res.data);
           }
