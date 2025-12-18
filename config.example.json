@@ -1,0 +1,18 @@
+{
+  "//_comment": "Copy this file to config.json and fill in your Jellyseerr + WAHA details.",
+  "baseUrl": "http://localhost:5055",
+  "apiKey": "YOUR_JELLYSEERR_API_KEY",
+  "defaultUserId": 2,
+  "defaultServer": null,
+  "waha": {
+    "baseUrl": "http://localhost:8584",
+    "apiKey": "YOUR_WAHA_API_KEY",
+    "session": "default"
+  },
+  "webhook": {
+    "port": 3003,
+    "path": "/webhook"
+  }
+}
+
+

@@ -17,7 +17,7 @@ cp config.example.json config.json
    - `waha.baseUrl`: your WAHA API URL (e.g., `http://localhost:8584` or `http://192.168.8.25:8584`)
    - `waha.apiKey`: your WAHA API key
    - `waha.session`: WAHA session name (default: "default")
-   - `webhook.port`: port for webhook server (default: 3000)
+   - `webhook.port`: port for webhook server (default: 3003)
    - `webhook.path`: webhook path (default: "/webhook")
 
 ### Running CLI Version
