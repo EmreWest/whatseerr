@@ -21,7 +21,8 @@
     "level": "info",
     "timestamps": false
   },
-  "command": "r,request,s,search"
+  "command": "r,request,s,search",
+  "command4k": "r4k,request4k"
 }
 
 

@@ -31,6 +31,7 @@ import { createWebhookServer } from './lib/webhook-server.js';
 async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
   const logger = cfg.__logger;
   const searchCommands = parseCommands(cfg.command);
+  const searchCommands4k = parseCommands(cfg.command4k);
   const primaryCommand = searchCommands[0] || 'r';
   try {
     // Extract message data from WAHA webhook payload
@@ -86,133 +87,20 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
     // Check if user is selecting seasons for a TV show
     if (pendingTvSelections.has(chatId)) {
-      const tvShow = pendingTvSelections.get(chatId);
+      const tvShowData = pendingTvSelections.get(chatId);
+      const tvShow = tvShowData.show || tvShowData; // Support both old and new format
+      const is4k = tvShowData.is4k || false;
       const { title: chosenTitle } = formatMedia(tvShow);
       
-      logger?.info(`📺 Season selection for: "${chosenTitle}"`);
+      logger?.info(`📺 Season selection for: "${chosenTitle}"${is4k ? ' (4K)' : ''}`);
       
-      // Parse season selection - use actual seasons array length
-      const availableSeasons = tvShow.seasons || [];
-      const maxSeasons = availableSeasons.length > 0 ? availableSeasons.length : (tvShow.numberOfSeasons || 10);
-      const seasonSelection = parseSeasonSelection(messageText, maxSeasons);
+      // Use the handler function
+      const result = await handleTvSeasonSelection(cfg, jellyseerrClient, wahaClient, chatId, messageText, tvShow, logger, is4k);
       
-      if (seasonSelection.cancelled) {
-        logger?.info('🚫 Cancelled season selection');
+      if (result?.cancelled || result?.allRequested || result?.success) {
         pendingTvSelections.delete(chatId);
         userSearchResults.delete(chatId);
-        await sendText(wahaClient, cfg, chatId, `❌ Cancelled`);
-        return;
       }
-      
-      if (seasonSelection.error) {
-        await sendText(wahaClient, cfg, chatId, `❌ ${seasonSelection.error}`);
-        return;
-      }
-      
-      // Check season status before creating request (duplicate prevention)
-      // Filter out season 0 (Specials) - never allow requesting specials
-      let seasons = (seasonSelection.seasons || []).filter(s => s !== 0);
-      
-      if (seasons.length === 0) {
-        await sendText(wahaClient, cfg, chatId, `❌ No valid seasons selected. Season 0 (Specials) cannot be requested.`);
-        return;
-      }
-      
-      // Get fresh media details to check current season status
-      let mediaDetails = tvShow.mediaDetails;
-      if (!mediaDetails) {
-        logger?.debug('Fetching fresh media details for season status check');
-        try {
-          mediaDetails = await getMediaDetails(jellyseerrClient, cfg, tvShow.id, 2);
-        } catch (err) {
-          logger?.warn('Failed to fetch media details for status check, proceeding with request', err?.message);
-        }
-      }
-      
-      // Check if selected seasons are already requested (duplicate prevention)
-      // According to reference: If IsRequested == Full, block request and show appropriate message
-      if (mediaDetails) {
-        const alreadyRequestedSeasons = [];
-        const alreadyAvailableSeasons = [];
-        const canRequestSeasons = [];
-        
-        for (const seasonNum of seasons) {
-          const seasonStatus = checkSeasonRequestStatus(mediaDetails, seasonNum);
-          if (seasonStatus.isRequested) {
-            if (seasonStatus.isAvailable) {
-              // Already available - warn user
-              alreadyAvailableSeasons.push(seasonNum);
-            } else {
-              // Already requested but not available
-              alreadyRequestedSeasons.push(seasonNum);
-            }
-          } else {
-            canRequestSeasons.push(seasonNum);
-          }
-        }
-        
-        // If all selected seasons are already requested or available
-        if (canRequestSeasons.length === 0 && (alreadyRequestedSeasons.length > 0 || alreadyAvailableSeasons.length > 0)) {
-          if (alreadyAvailableSeasons.length > 0) {
-            logger?.info(`✅ All selected seasons (${alreadyAvailableSeasons.join(', ')}) are already available`);
-            await sendText(wahaClient, cfg, chatId, `✅ Seasons ${alreadyAvailableSeasons.join(', ')} already available`);
-          } else {
-            logger?.info(`📋 All selected seasons (${alreadyRequestedSeasons.join(', ')}) are already requested`);
-            await sendText(wahaClient, cfg, chatId, `📋 Seasons ${alreadyRequestedSeasons.join(', ')} already requested`);
-          }
-          pendingTvSelections.delete(chatId);
-          userSearchResults.delete(chatId);
-          return;
-        }
-        
-        // If some seasons are already requested/available, only request the ones that can be requested
-        if (alreadyRequestedSeasons.length > 0 || alreadyAvailableSeasons.length > 0) {
-          const messages = [];
-          if (alreadyAvailableSeasons.length > 0) {
-            messages.push(`✅ S${alreadyAvailableSeasons.join(', S')} available`);
-          }
-          if (alreadyRequestedSeasons.length > 0) {
-            messages.push(`📋 S${alreadyRequestedSeasons.join(', S')} requested`);
-          }
-          logger?.info(`Some seasons already requested/available, requesting only seasons ${canRequestSeasons.join(', ')}`);
-          if (messages.length > 0) {
-            await sendText(wahaClient, cfg, chatId, messages.join('. '));
-          }
-          seasons = canRequestSeasons; // Update to only request requestable seasons
-        }
-      }
-      
-      // Create request with selected seasons
-      const seasonsText = seasons.length === maxSeasons ? 'all seasons' : `season${seasons.length > 1 ? 's' : ''} ${seasons.join(', ')}`;
-      logger?.info(`📨 Requesting "${chosenTitle}" (${seasonsText})`);
-      
-      try {
-        const res = await createRequest(jellyseerrClient, cfg, tvShow, seasons, logger);
-        logger?.debug('Create request response', { status: res.status, data: res.data });
-        
-        if (res.status === 201 || res.status === 200 || res.status === 202) {
-          logger?.debug('Request response received', { status: res.status });
-          const statusMessage = getRequestStatusMessage(res, 'TV', true);
-          await sendText(wahaClient, cfg, chatId, statusMessage);
-        } else if (res.status === 409) {
-          logger?.debug('Request conflict - media already requested or available');
-          const statusMessage = getRequestStatusMessage(res, 'TV', true);
-          await sendText(wahaClient, cfg, chatId, statusMessage);
-        } else {
-          logger?.error(`Unexpected response from Jellyseerr (status ${res.status})`);
-          logger?.debug('Unexpected response body', res.data);
-          const statusMessage = getRequestStatusMessage(res, 'TV', true);
-          await sendText(wahaClient, cfg, chatId, statusMessage);
-        }
-      } catch (err) {
-        logger?.error('Failed to create request', err?.message || err);
-        logger?.debug('Request error stack', err?.stack);
-        await sendText(wahaClient, cfg, chatId, `❌ Error: ${err.message}`);
-      }
-      
-      // Clear stored data
-      pendingTvSelections.delete(chatId);
-      userSearchResults.delete(chatId);
       return;
     }
 
@@ -237,169 +125,21 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         const { title: chosenTitle, year: chosenYear, typeStr } = formatMedia(chosen);
         const isTvShow = typeStr === 'TV' || chosen.mediaType === 2 || chosen.mediaType === 'tv';
 
-        // For TV shows, fetch details and check season status before showing selection
+        // For TV shows, use the handler function
         if (isTvShow) {
-          logger?.info(`📺 TV selected: "${chosenTitle}" — fetching seasons...`);
-          await sendText(wahaClient, cfg, chatId, `📺 Loading seasons for "${chosenTitle}"...`);
-          
-          try {
-            const mediaDetails = await getMediaDetails(jellyseerrClient, cfg, chosen.id, 2);
-            // Filter out season 0 (Specials) - never show or allow requesting specials
-            const allSeasons = mediaDetails.seasons || [];
-            const seasons = allSeasons.filter(season => {
-              const seasonNum = season.seasonNumber !== undefined ? season.seasonNumber : 
-                                season.season_number !== undefined ? season.season_number : null;
-              return seasonNum !== null && seasonNum !== 0;
-            });
-            logger?.debug('TV media details seasons', { seasonCount: seasons.length, totalIncludingSpecials: allSeasons.length });
-            
-            if (seasons.length === 0) {
-              // No season info available, check overall status before requesting all seasons
-              logger?.warn('No season info returned; checking overall status');
-              const statusInfo = extractMediaStatus(mediaDetails);
-              
-              if (statusInfo) {
-                const requested = isRequested(statusInfo.status);
-                const available = isAvailable(statusInfo.status);
-                
-                if (available) {
-                  logger?.info(`✅ "${chosenTitle}" is already available`);
-                  await sendText(wahaClient, cfg, chatId, `✅ Available`);
-                  userSearchResults.delete(chatId);
-                  return;
-                } else if (requested) {
-                  const statusMsg = formatStatusMessage(statusInfo.status, typeStr, true, null);
-                  logger?.info(`📋 "${chosenTitle}" is already requested`);
-                  await sendText(wahaClient, cfg, chatId, statusMsg);
-                  userSearchResults.delete(chatId);
-                  return;
-                }
-              }
-              
-              // Can be requested - proceed
-              const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
-              const statusMessage = getRequestStatusMessage(res, typeStr, true);
-              await sendText(wahaClient, cfg, chatId, statusMessage);
-              
-              userSearchResults.delete(chatId);
-              return;
-            }
-            
-            // Check season-level status (following reference: show all seasons, block requests for requested ones)
-            // According to reference: Show all seasons with indicators, block requests for IsRequested == Full
-            const requestedSeasons = [];
-            const canRequestSeasons = [];
-            
-            for (const season of seasons) {
-              // Handle different season object structures consistently
-              // Handle different season object structures consistently
-              const seasonNum = season.seasonNumber !== undefined ? season.seasonNumber : 
-                                season.season_number !== undefined ? season.season_number : null;
-              if (seasonNum === null) continue; // Skip if season number is missing
-              
-              const seasonStatus = checkSeasonRequestStatus(mediaDetails, seasonNum);
-              
-              if (seasonStatus.isRequested) {
-                requestedSeasons.push({ seasonNum, status: seasonStatus });
-              } else {
-                canRequestSeasons.push(seasonNum);
-              }
-            }
-            
-            // If all seasons are already requested
-            if (canRequestSeasons.length === 0 && requestedSeasons.length > 0) {
-              logger?.info(`📋 All seasons of "${chosenTitle}" are already requested`);
-              await sendText(wahaClient, cfg, chatId, `📋 All seasons already requested`);
-              userSearchResults.delete(chatId);
-              return;
-            }
-            
-            // Store TV show with all seasons for selection (we'll block requests for requested ones later)
-            chosen.seasons = seasons;
-            chosen.mediaDetails = mediaDetails; // Store full details for later season status checks
-            pendingTvSelections.set(chatId, chosen);
-            
-            // Show season selection with all seasons (indicators will show which are requested/available)
-            const seasonsMessage = formatSeasons(chosen.seasons, mediaDetails);
-            await sendText(wahaClient, cfg, chatId, seasonsMessage);
-            
-            // Keep search results in case user wants to cancel and pick something else
-            return;
-          } catch (err) {
-            logger?.error('Failed to get TV media details', err?.message || err);
-            await sendText(wahaClient, cfg, chatId, `⚠️ Error loading seasons. Requesting all...`);
-            
-            // Fallback: request all seasons (no status check possible)
-            try {
-              const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
-              const statusMessage = getRequestStatusMessage(res, typeStr, true);
-              await sendText(wahaClient, cfg, chatId, statusMessage);
-            } catch (reqErr) {
-              logger?.error('Fallback request failed', reqErr?.message || reqErr);
-              await sendText(wahaClient, cfg, chatId, `❌ Error: ${reqErr.message}`);
-            }
-            
-            userSearchResults.delete(chatId);
-            return;
-          }
-        }
-        
-        // For movies, check status before creating request (duplicate prevention)
-        logger?.info(`📨 Checking status for ${typeStr}: "${chosenTitle}" (${chosenYear})`);
-        
-        try {
-          // Get media details to check current status
-          const mediaDetails = await getMediaDetails(jellyseerrClient, cfg, chosen.id, 1);
-          const statusInfo = extractMediaStatus(mediaDetails);
-          
-          if (statusInfo) {
-            const requested = isRequested(statusInfo.status);
-            const available = isAvailable(statusInfo.status);
-            
-            // Check if can be requested (duplicate prevention)
-            if (!canBeRequested(statusInfo.status)) {
-              if (available) {
-                // Already available in library
-                logger?.info(`✅ "${chosenTitle}" is already available in your library`);
-                await sendText(wahaClient, cfg, chatId, `✅ Available`);
-                userSearchResults.delete(chatId);
-                return;
-              } else if (requested) {
-                // Already requested but not available
-                const statusMsg = formatStatusMessage(statusInfo.status, typeStr, false, null);
-                logger?.info(`📋 "${chosenTitle}" is already requested`);
-                await sendText(wahaClient, cfg, chatId, statusMsg);
-                userSearchResults.delete(chatId);
-                return;
-              }
-            }
-          }
-          
-          // Can be requested - proceed with request
-          logger?.info(`📨 Requesting ${typeStr}: "${chosenTitle}" (${chosenYear})`);
-          
-          const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
-          logger?.debug('Create request response', { status: res.status, data: res.data });
-          
-          if (res.status === 201 || res.status === 200 || res.status === 202) {
-            logger?.debug('Request response received', { status: res.status });
-            const statusMessage = getRequestStatusMessage(res, typeStr, false);
-            await sendText(wahaClient, cfg, chatId, statusMessage);
-          } else if (res.status === 409) {
-            logger?.debug('Request conflict - media already requested or available');
-            const statusMessage = getRequestStatusMessage(res, typeStr, false);
-            await sendText(wahaClient, cfg, chatId, statusMessage);
+          const result = await handleTvShowSelection(cfg, jellyseerrClient, wahaClient, chatId, chosen, logger, is4k);
+          if (result) {
+            // Store with is4k flag for season selection
+            pendingTvSelections.set(chatId, { show: result, is4k });
           } else {
-            logger?.error(`Unexpected response from Jellyseerr (status ${res.status})`);
-            logger?.debug('Unexpected response body', res.data);
-            const statusMessage = getRequestStatusMessage(res, typeStr, false);
-            await sendText(wahaClient, cfg, chatId, statusMessage);
+            // Handled (already requested/available or error)
+            userSearchResults.delete(chatId);
           }
-        } catch (err) {
-          logger?.error('Failed to check status or create request', err?.message || err);
-          logger?.debug('Request error stack', err?.stack);
-          await sendText(wahaClient, cfg, chatId, `❌ Error: ${err.message}`);
+          return;
         }
+        
+        // For movies, use the handler function
+        await handleMovieSelection(cfg, jellyseerrClient, wahaClient, chatId, chosen, logger, is4k);
 
         // Clear stored results
         userSearchResults.delete(chatId);
@@ -413,16 +153,21 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       }
     }
 
-    // Check if message starts with any configured command
-    const searchResult = extractSearchQuery(messageText, searchCommands);
+    // Check if message starts with any configured command (including 4K commands)
+    const searchResult = extractSearchQuery(messageText, searchCommands, searchCommands4k);
     if (!searchResult) {
-      const commandsList = searchCommands.join('", "');
+      const allCommands = [...searchCommands, ...searchCommands4k];
+      const commandsList = allCommands.join('", "');
       logger?.warn(`Message does not start with any command: "${commandsList}"`, { messageText });
-      await sendText(wahaClient, cfg, chatId, `💬 Use: ${searchCommands.join(', ')} <name>\nExample: ${primaryCommand} Matrix`);
+      const helpText = searchCommands4k.length > 0 
+        ? `💬 Use: ${searchCommands.join(', ')} <name> (standard) or ${searchCommands4k.join(', ')} <name> (4K)\nExample: ${primaryCommand} Matrix`
+        : `💬 Use: ${searchCommands.join(', ')} <name>\nExample: ${primaryCommand} Matrix`;
+      await sendText(wahaClient, cfg, chatId, helpText);
       return;
     }
 
     const query = searchResult.query;
+    const is4k = searchResult.is4k || false;
     
     // Handle empty query (user just typed command without search term)
     if (!query || query.trim().length === 0) {
