@@ -237,10 +237,10 @@ function formatStatusMessage(status, typeStr, isTvShow = false, seasonStatuses =
       return `✅ Available`;
     
     case 2: // PENDING - Requested? ✅, Available? ❌
-      return `✅ Requested`;
+      return `📋 Already requested`;
     
     case 3: // PROCESSING - Requested? ✅, Available? ❌
-      return `✅ Requested`;
+      return `📋 Already requested`;
     
     case 4: // PARTIALLY_AVAILABLE - Requested? ✅, In Library? ⚠️ Partial
       if (isTvShow && seasonStatuses) {

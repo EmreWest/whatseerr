@@ -384,10 +384,10 @@ function formatStatusMessage(status, typeStr, isTvShow = false, seasonStatuses =
       return `✅ Available`;
     
     case 2: // PENDING - Requested? ✅, Available? ❌
-      return `✅ Requested`;
+      return `📋 Already requested`;
     
     case 3: // PROCESSING - Requested? ✅, Available? ❌
-      return `✅ Requested`;
+      return `📋 Already requested`;
     
     case 4: // PARTIALLY_AVAILABLE - Requested? ✅, In Library? ⚠️ Partial
       if (isTvShow && seasonStatuses) {
@@ -608,24 +608,24 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       // Create request with selected seasons
       const seasonsText = seasons.length === maxSeasons ? 'all seasons' : `season${seasons.length > 1 ? 's' : ''} ${seasons.join(', ')}`;
       logger?.info(`📨 Requesting "${chosenTitle}" (${seasonsText})`);
-      await sendText(wahaClient, cfg, chatId, `📨 Requesting ${seasonsText}...`);
       
       try {
         const res = await createRequest(jellyseerrClient, cfg, tvShow, seasons, logger);
         logger?.debug('Create request response', { status: res.status, data: res.data });
         
-        const statusMessage = getRequestStatusMessage(res, 'TV', true);
-        
         if (res.status === 201 || res.status === 200) {
           logger?.debug('Request created successfully');
+          await sendText(wahaClient, cfg, chatId, `✅ Request created`);
         } else if (res.status === 409) {
           logger?.debug('Request conflict - media already requested or available');
+          const statusMessage = getRequestStatusMessage(res, 'TV', true);
+          await sendText(wahaClient, cfg, chatId, statusMessage);
         } else {
           logger?.error(`Unexpected response from Jellyseerr (status ${res.status})`);
           logger?.debug('Unexpected response body', res.data);
+          const statusMessage = getRequestStatusMessage(res, 'TV', true);
+          await sendText(wahaClient, cfg, chatId, statusMessage);
         }
-        
-        await sendText(wahaClient, cfg, chatId, statusMessage);
       } catch (err) {
         logger?.error('Failed to create request', err?.message || err);
         logger?.debug('Request error stack', err?.stack);
@@ -693,10 +693,13 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
               }
               
               // Can be requested - proceed
-              await sendText(wahaClient, cfg, chatId, `📨 Requesting all seasons...`);
               const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
-              const statusMessage = getRequestStatusMessage(res, typeStr, true);
-              await sendText(wahaClient, cfg, chatId, statusMessage);
+              if (res.status === 201 || res.status === 200) {
+                await sendText(wahaClient, cfg, chatId, `✅ Request created`);
+              } else {
+                const statusMessage = getRequestStatusMessage(res, typeStr, true);
+                await sendText(wahaClient, cfg, chatId, statusMessage);
+              }
               
               userSearchResults.delete(chatId);
               return;
@@ -752,8 +755,12 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
             // Fallback: request all seasons (no status check possible)
             try {
               const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
-              const statusMessage = getRequestStatusMessage(res, typeStr, true);
-              await sendText(wahaClient, cfg, chatId, statusMessage);
+              if (res.status === 201 || res.status === 200) {
+                await sendText(wahaClient, cfg, chatId, `✅ Request created`);
+              } else {
+                const statusMessage = getRequestStatusMessage(res, typeStr, true);
+                await sendText(wahaClient, cfg, chatId, statusMessage);
+              }
             } catch (reqErr) {
               logger?.error('Fallback request failed', reqErr?.message || reqErr);
               await sendText(wahaClient, cfg, chatId, `❌ Error creating request: ${reqErr.message}`);
@@ -797,23 +804,23 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           
           // Can be requested - proceed with request
           logger?.info(`📨 Requesting ${typeStr}: "${chosenTitle}" (${chosenYear})`);
-          await sendText(wahaClient, cfg, chatId, `📨 Requesting...`);
           
           const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
           logger?.debug('Create request response', { status: res.status, data: res.data });
           
-          const statusMessage = getRequestStatusMessage(res, typeStr, false);
-          
           if (res.status === 201 || res.status === 200) {
             logger?.debug('Request created successfully');
+            await sendText(wahaClient, cfg, chatId, `✅ Request created`);
           } else if (res.status === 409) {
             logger?.debug('Request conflict - media already requested or available');
+            const statusMessage = getRequestStatusMessage(res, typeStr, false);
+            await sendText(wahaClient, cfg, chatId, statusMessage);
           } else {
             logger?.error(`Unexpected response from Jellyseerr (status ${res.status})`);
             logger?.debug('Unexpected response body', res.data);
+            const statusMessage = getRequestStatusMessage(res, typeStr, false);
+            await sendText(wahaClient, cfg, chatId, statusMessage);
           }
-          
-          await sendText(wahaClient, cfg, chatId, statusMessage);
         } catch (err) {
           logger?.error('Failed to check status or create request', err?.message || err);
           logger?.debug('Request error stack', err?.stack);
