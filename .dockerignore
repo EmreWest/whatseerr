@@ -1,0 +1,16 @@
+node_modules/
+npm-debug.log
+.git/
+.gitignore
+.env
+.env.*
+*.log
+.DS_Store
+.idea/
+.vscode/
+config.json
+config/config.json
+*.md
+reference/
+scripts/
+

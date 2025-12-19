@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  whatsapp-bot:
+    build: .
+    container_name: whatsapp-requests-bot
+    restart: unless-stopped
+    ports:
+      - "3003:3003"  # Webhook port (adjust if different in config)
+    volumes:
+      - ./config:/config:ro  # Mount config directory as read-only
+    environment:
+      - NODE_ENV=production
+    networks:
+      - whatsapp-network
+
+networks:
+  whatsapp-network:
+    driver: bridge
+
