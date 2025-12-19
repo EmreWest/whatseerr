@@ -13,7 +13,7 @@ import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType } from './lib
 import { createLogger } from './lib/logger.js';
 
 // Import modules
-import { MAX_PROCESSED_MESSAGES } from './lib/constants.js';
+import { MAX_PROCESSED_MESSAGES, MAX_RESULTS_DISPLAY } from './lib/constants.js';
 import { userSearchResults, pendingTvSelections, processedMessages } from './lib/state.js';
 import { formatSearchResults } from './lib/message-formatters.js';
 import { parseCommands, extractSearchQuery } from './lib/command-parser.js';
@@ -151,9 +151,11 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
       
-      // Support both old format (array) and new format (object with results and is4k)
+      // Support both old format (array) and new format (object with results, is4k, offset, query)
       const results = Array.isArray(storedData) ? storedData : (storedData?.results || storedData);
       const storedIs4k = Array.isArray(storedData) ? false : (storedData?.is4k === true);
+      const offset = Array.isArray(storedData) ? 0 : (storedData?.offset || 0);
+      const query = Array.isArray(storedData) ? '' : (storedData?.query || '');
       
       if (!results || !Array.isArray(results) || results.length === 0) {
         logger?.warn('Invalid or empty stored results', { chatId });
@@ -162,7 +164,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
       
-      logger?.debug('Stored result count', { chatId, count: results.length, is4k: storedIs4k });
+      logger?.debug('Stored result count', { chatId, count: results.length, is4k: storedIs4k, offset });
       
       // Handle cancel (option 0)
       if (selectionNumber === 0) {
@@ -172,8 +174,34 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
       
-      if (selectionNumber >= 1 && selectionNumber <= results.length) {
-        const chosen = results[selectionNumber - 1];
+      // Calculate displayed count and check for "Show more" option (8 results per page, option 9 for next page)
+      const resultsPerPage = 8;
+      const displayedCount = Math.min(resultsPerPage, results.length - offset);
+      const hasMore = (offset + displayedCount) < results.length;
+      const showMoreOption = hasMore ? displayedCount + 1 : null;
+      
+      // Handle "Show more" selection
+      if (showMoreOption && selectionNumber === showMoreOption) {
+        logger?.info(`📄 Showing more results (offset: ${offset + displayedCount})`);
+        const nextOffset = offset + displayedCount;
+        const formatted = formatSearchResults(results, query, resultsPerPage, nextOffset);
+        
+        // Update stored data with new offset
+        userSearchResults.set(chatId, {
+          results,
+          is4k: storedIs4k,
+          offset: nextOffset,
+          query
+        });
+        
+        await sendText(wahaClient, cfg, chatId, formatted.message);
+        return;
+      }
+      
+      // Handle regular selection (1 to displayedCount)
+      if (selectionNumber >= 1 && selectionNumber <= displayedCount) {
+        const actualIndex = offset + selectionNumber - 1; // Convert display number to actual array index
+        const chosen = results[actualIndex];
         const { title: chosenTitle, year: chosenYear, typeStr } = formatMedia(chosen);
         const isTvShow = typeStr === 'TV' || chosen.mediaType === 2 || chosen.mediaType === 'tv';
 
@@ -208,8 +236,9 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       } else {
         // Invalid selection number
-        logger?.warn(`Invalid selection number ${selectionNumber}`, { validRange: `0-${results.length}` });
-        await sendText(wahaClient, cfg, chatId, `❌ Invalid. Reply with 0-${results.length} (0 = cancel)`);
+        const maxOption = showMoreOption || displayedCount;
+        logger?.warn(`Invalid selection number ${selectionNumber}`, { validRange: `0-${maxOption}` });
+        await sendText(wahaClient, cfg, chatId, `❌ Invalid. Reply with 0-${maxOption} (0 = cancel)`);
         return;
       }
     }
@@ -267,8 +296,13 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
 
-      // Store results for this user along with is4k flag
-      userSearchResults.set(chatId, { results: candidates, is4k });
+      // Store results for this user along with is4k flag, offset, and query
+      userSearchResults.set(chatId, { 
+        results: candidates, 
+        is4k, 
+        offset: 0, 
+        query 
+      });
       const identifierInfo = getIdentifierType(chatId);
       logger?.debug('Stored results [USES LID FORMAT]', { 
         chatId, 
@@ -277,9 +311,10 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         ...identifierInfo
       });
 
-      // Format and send results
-      const resultsMessage = formatSearchResults(candidates, query);
-      await sendText(wahaClient, cfg, chatId, resultsMessage);
+      // Format and send results (first page, offset 0, 8 results per page)
+      const resultsPerPage = 8;
+      const formatted = formatSearchResults(candidates, query, resultsPerPage, 0);
+      await sendText(wahaClient, cfg, chatId, formatted.message);
 
     } catch (err) {
       logger?.error(`Error searching for "${query}"`, err?.message || err);
