@@ -21,6 +21,11 @@
     "level": "info",
     "timestamps": false
   },
+  "//_userIdMappings_comment": "Map WAHA phone numbers (from chatId like '96566674323@c.us') to Overseerr user IDs. Use phone number without @c.us suffix as key.",
+  "userIdMappings": {
+    "96566674323": 2,
+    "96566631423": 4
+  },
   "command": "r,request,s,search",
   "command4k": "r4k,request4k"
 }

@@ -7,13 +7,13 @@
  * and sends formatted responses back to users.
  */
 
-import { createHttpClient, searchTitle, createRequest, formatMedia, getMediaDetails, extractMediaStatus, formatStatusMessage } from './lib/request.js';
+import { createHttpClient, searchTitle, formatMedia } from './lib/request.js';
 import { createWahaClient, sendText } from './lib/waha-client.js';
 import { loadConfig, getWebhookUrl } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
 // Import modules
-import { MAX_PROCESSED_MESSAGES, MAX_ERROR_BODY_LENGTH } from './lib/constants.js';
+import { MAX_PROCESSED_MESSAGES } from './lib/constants.js';
 import { userSearchResults, pendingTvSelections, processedMessages } from './lib/state.js';
 import { formatSearchResults } from './lib/message-formatters.js';
 import { parseCommands, extractSearchQuery } from './lib/command-parser.js';
