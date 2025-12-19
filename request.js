@@ -167,6 +167,99 @@ export function formatMedia(media) {
   return { title, year, typeStr };
 }
 
+/**
+ * Extracts media status from API response
+ * @param {Object} data - Response data from Jellyseerr API
+ * @returns {Object|null} Status object with { status: number } or null
+ */
+function extractMediaStatus(data) {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  // Check for media status in the response
+  // The createRequest response returns a MediaRequest object with a media field
+  const mediaInfo = data.media || data.mediaInfo || data;
+  
+  // Status values: 1=UNKNOWN, 2=PENDING, 3=PROCESSING, 4=PARTIALLY_AVAILABLE, 5=AVAILABLE, 6=DELETED
+  // Handle both number and string representations
+  let status = mediaInfo.status;
+  if (typeof status === 'string') {
+    status = parseInt(status, 10);
+  }
+  
+  if (typeof status !== 'number' || isNaN(status) || status < 1 || status > 6) {
+    return null;
+  }
+
+  // For TV shows, extract season-level status
+  // Check both MediaInfo.Seasons (capital S) and seasons (lowercase)
+  let seasons = null;
+  if (mediaInfo.Seasons && Array.isArray(mediaInfo.Seasons)) {
+    seasons = mediaInfo.Seasons.map(s => ({
+      seasonNumber: s.seasonNumber || s.season_number,
+      status: typeof s.status === 'string' ? parseInt(s.status, 10) : s.status,
+    })).filter(s => typeof s.status === 'number' && !isNaN(s.status));
+  } else if (mediaInfo.seasons && Array.isArray(mediaInfo.seasons)) {
+    seasons = mediaInfo.seasons.map(s => ({
+      seasonNumber: s.seasonNumber || s.season_number,
+      status: typeof s.status === 'string' ? parseInt(s.status, 10) : (s.status || status),
+    })).filter(s => typeof s.status === 'number' && !isNaN(s.status));
+  }
+
+  return {
+    status: status,
+    seasons: seasons,
+  };
+}
+
+/**
+ * Formats status message based on media status
+ * @param {number} status - Status code (1-6)
+ * @param {string} typeStr - Media type string (Movie/TV)
+ * @param {boolean} isTvShow - Whether this is a TV show
+ * @param {Array|null} seasonStatuses - Array of season statuses (for TV shows)
+ * @returns {string} User-friendly status message
+ */
+function formatStatusMessage(status, typeStr, isTvShow = false, seasonStatuses = null) {
+  const typeLower = typeStr.toLowerCase();
+  
+  switch (status) {
+    case 5: // AVAILABLE - Available? ✅, In Library? ✅
+      if (isTvShow && seasonStatuses) {
+        const allAvailable = seasonStatuses.every(s => s.status === 5);
+        if (allAvailable) {
+          return `✅ Available`;
+        }
+        const availableCount = seasonStatuses.filter(s => s.status === 5).length;
+        return `✅ ${availableCount}/${seasonStatuses.length} seasons`;
+      }
+      return `✅ Available`;
+    
+    case 2: // PENDING - Requested? ✅, Available? ❌
+      return `✅ Requested`;
+    
+    case 3: // PROCESSING - Requested? ✅, Available? ❌
+      return `✅ Requested`;
+    
+    case 4: // PARTIALLY_AVAILABLE - Requested? ✅, In Library? ⚠️ Partial
+      if (isTvShow && seasonStatuses) {
+        const partialCount = seasonStatuses.filter(s => s.status === 4 || s.status === 5).length;
+        return `📺 ${partialCount}/${seasonStatuses.length} seasons`;
+      }
+      return `📺 Partially available`;
+    
+    case 1: // UNKNOWN - Can Request? ✅
+      return `✅ Request created`;
+    
+    case 6: // DELETED
+      return `✅ Request created`;
+    
+    default:
+      return `✅ Request created`;
+  }
+}
+
 async function main() {
   const cfg = loadConfig({ requireWaha: false });
   const client = createHttpClient(cfg.jellyseerr.apiBaseUrl);
@@ -248,24 +341,56 @@ async function main() {
 
       try {
         const res = await createRequest(client, cfg, chosen, null, logger);
+        const isTvShow = typeStr === 'TV';
+        
         if (res.status === 201 || res.status === 200) {
-          logger.info('✅ Request created successfully.');
+          // For successful requests, check the media status
+          const statusInfo = extractMediaStatus(res.data);
+          
+          if (statusInfo) {
+            // Use the status to provide detailed feedback
+            // Pass season statuses directly (already extracted with status field)
+            const seasonStatuses = isTvShow && statusInfo.seasons && statusInfo.seasons.length > 0
+              ? statusInfo.seasons
+              : null;
+            
+            const statusMsg = formatStatusMessage(statusInfo.status, typeStr, isTvShow, seasonStatuses);
+            logger.info(statusMsg);
+          } else {
+            logger.info('✅ Request created');
+          }
         } else if (res.status === 409) {
           // Check response data to determine specific status
           const data = res.data || {};
+          const apiMessage = (() => {
+            if (typeof data === 'string') {
+              const s = data.trim();
+              return s ? s.slice(0, 300) : null;
+            }
+            if (data && typeof data === 'object') {
+              const m = data.message || data.error || data.details || data.reason;
+              return typeof m === 'string' && m.trim() ? m.trim().slice(0, 300) : null;
+            }
+            return null;
+          })();
           
-          if (data.status === 'available' || data.mediaStatus === 'available' || 
-              data.media?.status === 'available' || data.media?.mediaStatus === 'available') {
-            logger.info('✅ Already available in your library.');
-          } else if (data.status === 'pending' || data.status === 'approved' || 
-                     data.mediaStatus === 'pending' || data.mediaStatus === 'approved' ||
-                     data.media?.status === 'pending' || data.media?.status === 'approved' ||
-                     data.media?.mediaStatus === 'pending' || data.media?.mediaStatus === 'approved') {
-            logger.info('⏳ Already requested and pending approval.');
-          } else if (data.request || data.media?.request) {
-            logger.info('📋 Already requested.');
+          // Prioritize API message if available
+          if (apiMessage) {
+            logger.info(`ℹ️ ${apiMessage}`);
           } else {
-            logger.info('ℹ️ Already requested or available.');
+            // Try to extract status from response
+            const statusInfo = extractMediaStatus(data);
+            if (statusInfo) {
+              // Pass season statuses directly (already extracted with status field)
+              const seasonStatuses = isTvShow && statusInfo.seasons && statusInfo.seasons.length > 0
+                ? statusInfo.seasons
+                : null;
+              const statusMsg = formatStatusMessage(statusInfo.status, typeStr, isTvShow, seasonStatuses);
+              logger.info(statusMsg);
+            } else {
+              // Fallback message if status cannot be extracted
+              logger.info('ℹ️ Already requested or available');
+            }
           }
           
           logger.debug('409 response details', res.data);
