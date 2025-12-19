@@ -172,7 +172,7 @@ export function formatMedia(media) {
  * @param {Object} data - Response data from Jellyseerr API
  * @returns {Object|null} Status object with { status: number } or null
  */
-function extractMediaStatus(data) {
+export function extractMediaStatus(data) {
   if (!data || typeof data !== 'object') {
     return null;
   }
@@ -193,17 +193,19 @@ function extractMediaStatus(data) {
   }
 
   // For TV shows, extract season-level status
-  // Check both MediaInfo.Seasons (capital S) and seasons (lowercase)
+  // API returns mediaInfo.seasons (lowercase) per OpenAPI spec and actual API responses
+  // Check lowercase first (actual API format), then uppercase for compatibility
   let seasons = null;
-  if (mediaInfo.Seasons && Array.isArray(mediaInfo.Seasons)) {
-    seasons = mediaInfo.Seasons.map(s => ({
-      seasonNumber: s.seasonNumber || s.season_number,
-      status: typeof s.status === 'string' ? parseInt(s.status, 10) : s.status,
-    })).filter(s => typeof s.status === 'number' && !isNaN(s.status));
-  } else if (mediaInfo.seasons && Array.isArray(mediaInfo.seasons)) {
+  if (mediaInfo.seasons && Array.isArray(mediaInfo.seasons)) {
     seasons = mediaInfo.seasons.map(s => ({
       seasonNumber: s.seasonNumber || s.season_number,
       status: typeof s.status === 'string' ? parseInt(s.status, 10) : (s.status || status),
+    })).filter(s => typeof s.status === 'number' && !isNaN(s.status));
+  } else if (mediaInfo.Seasons && Array.isArray(mediaInfo.Seasons)) {
+    // Fallback for compatibility with older API versions
+    seasons = mediaInfo.Seasons.map(s => ({
+      seasonNumber: s.seasonNumber || s.season_number,
+      status: typeof s.status === 'string' ? parseInt(s.status, 10) : s.status,
     })).filter(s => typeof s.status === 'number' && !isNaN(s.status));
   }
 
@@ -221,9 +223,7 @@ function extractMediaStatus(data) {
  * @param {Array|null} seasonStatuses - Array of season statuses (for TV shows)
  * @returns {string} User-friendly status message
  */
-function formatStatusMessage(status, typeStr, isTvShow = false, seasonStatuses = null) {
-  const typeLower = typeStr.toLowerCase();
-  
+export function formatStatusMessage(status, typeStr, isTvShow = false, seasonStatuses = null) {
   switch (status) {
     case 5: // AVAILABLE - Available? ✅, In Library? ✅
       if (isTvShow && seasonStatuses) {
