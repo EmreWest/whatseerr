@@ -8,7 +8,7 @@
  */
 
 import { createHttpClient, searchTitle, formatMedia } from './lib/request.js';
-import { createWahaClient, sendText } from './lib/waha-client.js';
+import { createWahaClient, sendText, sendSeen } from './lib/waha-client.js';
 import { loadConfig, getWebhookUrl } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
@@ -50,6 +50,14 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     const chatId = payload.from;
     const messageText = payload.body?.trim() || '';
     const messageId = payload.id;
+
+    // Send seen before processing the message
+    try {
+      await sendSeen(wahaClient, cfg, chatId);
+    } catch (err) {
+      // Log error but continue processing
+      logger?.warn('Failed to send seen indicator', err?.message || err);
+    }
 
     // Check for duplicate messages early (before processing)
     if (messageId && processedMessages.has(messageId)) {
