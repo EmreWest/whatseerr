@@ -88,13 +88,29 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     // Check if user is selecting seasons for a TV show
     if (pendingTvSelections.has(chatId)) {
       const tvShowData = pendingTvSelections.get(chatId);
-      const tvShow = tvShowData.show || tvShowData; // Support both old and new format
-      const is4k = tvShowData.is4k || false;
-      const { title: chosenTitle } = formatMedia(tvShow);
+      if (!tvShowData) {
+        logger?.warn('No stored TV show data found for season selection', { chatId });
+        pendingTvSelections.delete(chatId);
+        userSearchResults.delete(chatId);
+        return;
+      }
       
+      // Support both old format (just the show object) and new format (object with show and is4k)
+      const tvShow = (tvShowData && typeof tvShowData === 'object' && 'show' in tvShowData) ? tvShowData.show : tvShowData;
+      const is4k = (tvShowData && typeof tvShowData === 'object' && 'is4k' in tvShowData) ? (tvShowData.is4k === true) : false;
+      
+      if (!tvShow) {
+        logger?.warn('Invalid TV show data in stored selection', { chatId });
+        pendingTvSelections.delete(chatId);
+        userSearchResults.delete(chatId);
+        await sendText(wahaClient, cfg, chatId, `❌ Invalid selection. Please search again.`);
+        return;
+      }
+      
+      const { title: chosenTitle } = formatMedia(tvShow);
       logger?.info(`📺 Season selection for: "${chosenTitle}"${is4k ? ' (4K)' : ''}`);
       
-      // Use the handler function
+      // Use the handler function - is4k flag propagates through all steps
       const result = await handleTvSeasonSelection(cfg, jellyseerrClient, wahaClient, chatId, messageText, tvShow, logger, is4k);
       
       if (result?.cancelled || result?.allRequested || result?.success) {
@@ -109,8 +125,25 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     if (!isNaN(selectionNumber) && userSearchResults.has(chatId)) {
       logger?.info(`🔢 Selection from ${chatId}: ${selectionNumber}`);
       // User is selecting from previous results
-      const results = userSearchResults.get(chatId);
-      logger?.debug('Stored result count', { chatId, count: results.length });
+      const storedData = userSearchResults.get(chatId);
+      if (!storedData) {
+        logger?.warn('No stored results found for selection', { chatId });
+        userSearchResults.delete(chatId);
+        return;
+      }
+      
+      // Support both old format (array) and new format (object with results and is4k)
+      const results = Array.isArray(storedData) ? storedData : (storedData?.results || storedData);
+      const storedIs4k = Array.isArray(storedData) ? false : (storedData?.is4k === true);
+      
+      if (!results || !Array.isArray(results) || results.length === 0) {
+        logger?.warn('Invalid or empty stored results', { chatId });
+        userSearchResults.delete(chatId);
+        await sendText(wahaClient, cfg, chatId, `❌ No results available. Please search again.`);
+        return;
+      }
+      
+      logger?.debug('Stored result count', { chatId, count: results.length, is4k: storedIs4k });
       
       // Handle cancel (option 0)
       if (selectionNumber === 0) {
@@ -127,10 +160,10 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
         // For TV shows, use the handler function
         if (isTvShow) {
-          const result = await handleTvShowSelection(cfg, jellyseerrClient, wahaClient, chatId, chosen, logger, is4k);
+          const result = await handleTvShowSelection(cfg, jellyseerrClient, wahaClient, chatId, chosen, logger, storedIs4k);
           if (result) {
             // Store with is4k flag for season selection
-            pendingTvSelections.set(chatId, { show: result, is4k });
+            pendingTvSelections.set(chatId, { show: result, is4k: storedIs4k });
           } else {
             // Handled (already requested/available or error)
             userSearchResults.delete(chatId);
@@ -139,7 +172,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         }
         
         // For movies, use the handler function
-        await handleMovieSelection(cfg, jellyseerrClient, wahaClient, chatId, chosen, logger, is4k);
+        await handleMovieSelection(cfg, jellyseerrClient, wahaClient, chatId, chosen, logger, storedIs4k);
 
         // Clear stored results
         userSearchResults.delete(chatId);
@@ -167,7 +200,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     }
 
     const query = searchResult.query;
-    const is4k = searchResult.is4k || false;
+    // Extract is4k flag from command match - this propagates through all subsequent steps
+    const is4k = searchResult.is4k === true;
     
     // Handle empty query (user just typed command without search term)
     if (!query || query.trim().length === 0) {
@@ -192,9 +226,9 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
 
-      // Store results for this user
-      userSearchResults.set(chatId, candidates);
-      logger?.debug('Stored results', { chatId, count: candidates.length });
+      // Store results for this user along with is4k flag
+      userSearchResults.set(chatId, { results: candidates, is4k });
+      logger?.debug('Stored results', { chatId, count: candidates.length, is4k });
 
       // Format and send results
       const resultsMessage = formatSearchResults(candidates);
@@ -203,7 +237,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     } catch (err) {
       logger?.error(`Error searching for "${query}"`, err?.message || err);
       logger?.debug('Search error stack', err?.stack);
-      await sendText(wahaClient, cfg, chatId, `❌ Search error: ${err.message}`);
+      const errorMsg = err?.message || 'Unknown error';
+      await sendText(wahaClient, cfg, chatId, `❌ Search error: ${errorMsg}`);
       userSearchResults.delete(chatId);
     }
 
