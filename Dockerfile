@@ -18,8 +18,8 @@ RUN mkdir -p /config && \
       cp -r config/* /config/; \
     fi
 
-# Expose webhook port (default 3003, but configurable)
-EXPOSE 3003
+# Expose webhook port (default 3006, but configurable)
+EXPOSE 3006
 
 # Run the WhatsApp bot
 CMD ["node", "whatsapp-bot.js"]

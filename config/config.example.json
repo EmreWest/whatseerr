@@ -14,7 +14,7 @@
     "session": "default"
   },
   "webhook": {
-    "port": 3003,
+    "port": 3006,
     "path": "/webhook"
   },
   "logging": {
