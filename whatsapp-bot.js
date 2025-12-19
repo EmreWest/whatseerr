@@ -615,7 +615,10 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         
         if (res.status === 201 || res.status === 200) {
           logger?.debug('Request created successfully');
-          await sendText(wahaClient, cfg, chatId, `✅ Request created`);
+          const requestText = seasons.length === maxSeasons 
+            ? `✅ Request created: "${chosenTitle}" (all seasons)`
+            : `✅ Request created: "${chosenTitle}" (${seasonsText})`;
+          await sendText(wahaClient, cfg, chatId, requestText);
         } else if (res.status === 409) {
           logger?.debug('Request conflict - media already requested or available');
           const statusMessage = getRequestStatusMessage(res, 'TV', true);
@@ -662,7 +665,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         // For TV shows, fetch details and check season status before showing selection
         if (isTvShow) {
           logger?.info(`📺 TV selected: "${chosenTitle}" — fetching seasons...`);
-          await sendText(wahaClient, cfg, chatId, `📺 Loading seasons...`);
+          await sendText(wahaClient, cfg, chatId, `📺 Loading seasons for "${chosenTitle}"...`);
           
           try {
             const mediaDetails = await getMediaDetails(jellyseerrClient, cfg, chosen.id, 2);
@@ -695,7 +698,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
               // Can be requested - proceed
               const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
               if (res.status === 201 || res.status === 200) {
-                await sendText(wahaClient, cfg, chatId, `✅ Request created`);
+                await sendText(wahaClient, cfg, chatId, `✅ Request created: "${chosenTitle}" (all seasons)`);
               } else {
                 const statusMessage = getRequestStatusMessage(res, typeStr, true);
                 await sendText(wahaClient, cfg, chatId, statusMessage);
@@ -756,7 +759,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
             try {
               const res = await createRequest(jellyseerrClient, cfg, chosen, null, logger);
               if (res.status === 201 || res.status === 200) {
-                await sendText(wahaClient, cfg, chatId, `✅ Request created`);
+                await sendText(wahaClient, cfg, chatId, `✅ Request created: "${chosenTitle}" (all seasons)`);
               } else {
                 const statusMessage = getRequestStatusMessage(res, typeStr, true);
                 await sendText(wahaClient, cfg, chatId, statusMessage);
@@ -810,7 +813,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           
           if (res.status === 201 || res.status === 200) {
             logger?.debug('Request created successfully');
-            await sendText(wahaClient, cfg, chatId, `✅ Request created`);
+            await sendText(wahaClient, cfg, chatId, `✅ Request created: "${chosenTitle}" (${chosenYear})`);
           } else if (res.status === 409) {
             logger?.debug('Request conflict - media already requested or available');
             const statusMessage = getRequestStatusMessage(res, typeStr, false);
