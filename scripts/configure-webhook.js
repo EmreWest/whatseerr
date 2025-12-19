@@ -7,9 +7,9 @@
  * Run this after starting your bot server.
  */
 
-import { createHttpClient } from './request.js';
-import { loadConfig, getWebhookUrl } from './utils.js';
-import { createLogger } from './logger.js';
+import { createHttpClient } from '../lib/request.js';
+import { loadConfig, getWebhookUrl } from '../lib/utils.js';
+import { createLogger } from '../lib/logger.js';
 
 async function configureWebhook() {
   const cfg = loadConfig({ requireWaha: true, requireWebhook: true, requireWebhookHost: true });
