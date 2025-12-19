@@ -220,9 +220,22 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       const allCommands = [...searchCommands, ...searchCommands4k];
       const commandsList = allCommands.join('", "');
       logger?.warn(`Message does not start with any command: "${commandsList}"`, { messageText });
-      const helpText = searchCommands4k.length > 0 
-        ? `💬 Use: ${searchCommands.join(', ')} <name> (standard) or ${searchCommands4k.join(', ')} <name> (4K)\nExample: ${primaryCommand} Matrix`
-        : `💬 Use: ${searchCommands.join(', ')} <name>\nExample: ${primaryCommand} Matrix`;
+      
+      // Build help message with new format
+      let helpText = '📌 Available Commands:\n\n';
+      
+      // Standard request section
+      const standardExample = searchCommands[0] || primaryCommand;
+      helpText += `🎬 Standard Request\n${standardExample} <name>\nExample: ${standardExample} Matrix\n`;
+      
+      // 4K request section (if configured and help4k is enabled)
+      if (cfg.help4k === true && searchCommands4k.length > 0) {
+        const fourKExample = searchCommands4k[0];
+        helpText += `\n🖥️ 4K Request\n${fourKExample} <name>\nExample: ${fourKExample} Matrix\n`;
+      }
+      
+      helpText += '\n📝 Just type the command followed by the movie or show name.';
+      
       await sendText(wahaClient, cfg, chatId, helpText);
       return;
     }
@@ -265,7 +278,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       });
 
       // Format and send results
-      const resultsMessage = formatSearchResults(candidates);
+      const resultsMessage = formatSearchResults(candidates, query);
       await sendText(wahaClient, cfg, chatId, resultsMessage);
 
     } catch (err) {
