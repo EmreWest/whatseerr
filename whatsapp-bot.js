@@ -9,7 +9,7 @@
 
 import { createHttpClient, searchTitle, formatMedia } from './lib/request.js';
 import { createWahaClient, sendText, sendSeen } from './lib/waha-client.js';
-import { loadConfig, getWebhookUrl } from './lib/utils.js';
+import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
 // Import modules
@@ -51,6 +51,15 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     const messageText = payload.body?.trim() || '';
     const messageId = payload.id;
 
+    // Log LID format detection for debugging
+    const isLid = isLidFormat(chatId);
+    logger?.debug('Message received', {
+      chatId,
+      isLidFormat: isLid,
+      messageId,
+      messageLength: messageText.length
+    });
+
     // Send seen before processing the message
     try {
       await sendSeen(wahaClient, cfg, chatId);
@@ -61,7 +70,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
     // Check for duplicate messages early (before processing)
     if (messageId && processedMessages.has(messageId)) {
-      logger?.debug('Duplicate message detected, ignoring', { messageId });
+      logger?.debug('Duplicate message detected, ignoring', { messageId, chatId });
       return;
     }
 
@@ -73,6 +82,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         // Remove oldest entry (Set maintains insertion order)
         const firstId = processedMessages.values().next().value;
         processedMessages.delete(firstId);
+        logger?.debug('Cleaned up old processed message ID', { removedId: firstId, totalSize: processedMessages.size });
       }
     }
 
@@ -80,6 +90,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       chatId,
       messageId,
       messageText,
+      isLidFormat: isLid,
       fromMe: payload.fromMe,
       to: payload.to,
       event: webhookData.event,
@@ -172,6 +183,11 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           if (result) {
             // Store with is4k flag for season selection
             pendingTvSelections.set(chatId, { show: result, is4k: storedIs4k });
+            const identifierInfo = getIdentifierType(chatId);
+            logger?.debug('Stored TV selection [USES LID FORMAT]', {
+              chatId,
+              ...identifierInfo
+            });
           } else {
             // Handled (already requested/available or error)
             userSearchResults.delete(chatId);
@@ -184,7 +200,11 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
         // Clear stored results
         userSearchResults.delete(chatId);
-        logger?.debug('Cleared stored results for user', { chatId });
+        const identifierInfo = getIdentifierType(chatId);
+        logger?.debug('Cleared stored results for user [USES LID FORMAT]', { 
+          chatId,
+          ...identifierInfo
+        });
         return;
       } else {
         // Invalid selection number
@@ -236,7 +256,13 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
       // Store results for this user along with is4k flag
       userSearchResults.set(chatId, { results: candidates, is4k });
-      logger?.debug('Stored results', { chatId, count: candidates.length, is4k });
+      const identifierInfo = getIdentifierType(chatId);
+      logger?.debug('Stored results [USES LID FORMAT]', { 
+        chatId, 
+        count: candidates.length, 
+        is4k,
+        ...identifierInfo
+      });
 
       // Format and send results
       const resultsMessage = formatSearchResults(candidates);

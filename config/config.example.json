@@ -21,7 +21,7 @@
     "level": "info",
     "timestamps": false
   },
-  "//_userIdMappings_comment": "Map WAHA phone numbers (from chatId like '96566674323@c.us') to Jellyseerr user IDs. Use phone number without @c.us suffix as key.",
+  "//_userIdMappings_comment": "Map WAHA phone numbers to Jellyseerr user IDs. Use phone number without @c.us suffix as key. LID format (@lid) is automatically resolved to phone number for lookup.",
   "userIdMappings": {
     "96566674323": 2,
     "96566631423": 4
