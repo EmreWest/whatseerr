@@ -4,7 +4,7 @@ services:
     container_name: whatsapp-requests-bot
     restart: unless-stopped
     ports:
-      - "3006:3006"  # Webhook port (adjust if different in config)
+      - "3006:3006"  # Webhook port
     volumes:
       - ./config:/config  # Mount config directory as read-writable
       - ./lib:/app/lib  # Mount lib directory for live code changes (writable)
@@ -13,6 +13,8 @@ services:
       - ./scripts:/app/scripts  # Mount scripts directory (writable)
     environment:
       - NODE_ENV=development
+      - WEBHOOK_EXTERNAL_PORT=3006
+      - TZ=Asia/Kuwait
     command: node --watch whatsapp-bot.js  # Use watch mode for live reload
     networks:
       - whatsapp-network

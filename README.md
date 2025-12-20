@@ -19,13 +19,17 @@ cp config/config.example.json config.json
    - `host`: hostname/IP shared by Jellyseerr + WAHA + the bot webhook (example: `192.168.1.8`)
    - `jellyseerr.port`: Jellyseerr port (example: `5055`)
    - `jellyseerr.apiKey`: the API key you copied
+   - `jellyseerr.adminDetails.phoneNumber`: Admin's WhatsApp phone number (for approval notifications)
+   - `jellyseerr.adminDetails.seerrUserId`: Admin's Jellyseerr user ID
    - `waha.port`: WAHA port (example: `8584`)
    - `waha.apiKey`: your WAHA API key
    - `waha.session`: WAHA session name (default: "default")
-   - `webhook.port`: port for webhook server
-   - `webhook.path`: webhook path (example: `/webhook`)
+   - `webhook.requests.path`: webhook path for WAHA requests (default: `/requests`)
+   - `webhook.seerr.path`: webhook path for Jellyseerr notifications (default: `/seerr`)
    - `logging.level`: `info` (default) or `debug`
    - `command`: command prefix(es) for requests, comma-separated (default: `"r"`, example: `"r,request,s,search"`)
+   - `command4k`: command prefix(es) for 4K requests (optional)
+   - `help4k`: whether to show 4K commands in help (default: `false`)
 
 ### Running CLI Version
 
@@ -64,8 +68,8 @@ The script will:
    Option B - Manual configuration:
    - Open your WAHA dashboard (e.g., `http://localhost:8584`)
    - Navigate to session settings
-   - Add webhook URL: `http(s)://<host>:<webhook.port><webhook.path>` (adjust as needed)
-   - Enable events: `message`, `message.any`
+   - Add webhook URL: `http(s)://<host>:3006<webhook.requests.path>` (default: `http(s)://<host>:3006/requests`)
+   - Enable events: `message`, `message.any`, `message.reaction` (for emoji approvals)
 
 3. **Usage via WhatsApp:**
    - Send: `r The Matrix` (or your configured command)
@@ -121,7 +125,7 @@ The script will:
    docker run -d \
      --name whatsapp-requests-bot \
      --restart unless-stopped \
-     -p 3003:3003 \
+     -p 3006:3006 \
      -v $(pwd)/config:/config:ro \
      whatsapp-requests-bot
    ```

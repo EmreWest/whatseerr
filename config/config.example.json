@@ -1,41 +1,53 @@
 {
   "//_comment": "Copy this file to config.json and fill in your Jellyseerr + WAHA details.",
-  "protocol": "http",
-  "host": "localhost",
-  "jellyseerr": {
-    "port": 5055,
-    "apiKey": "YOUR_JELLYSEERR_API_KEY",
-    "defaultUserId": 2,
-    "defaultServer": null
-  },
-  "waha": {
-    "port": 8584,
-    "apiKey": "YOUR_WAHA_API_KEY",
-    "session": "default"
-  },
-  "webhook": {
-    "port": 3006,
-    "path": "/webhook"
-  },
-  "logging": {
-    "level": "info",
-    "timestamps": false
-  },
-  "//_userIdMappings_comment": "Map WAHA phone numbers to Jellyseerr user IDs. Use phone number without @c.us suffix as key. Each entry must have 'userId' (number) and 'username' (string) properties. LID format (@lid) is automatically resolved to phone number for lookup.",
-  "//_lidMappings_comment": "Map phone number format chatIds to LID format chatIds. This allows using LID format (more private) when sending messages. Format: \"phoneNumber@c.us\": \"lidNumber@lid\". Mappings are automatically created when LID format messages are received.",
-  "lidMappings": {},
-  "userIdMappings": {
-    "96566674323": {
-      "userId": 2,
-      "username": ""
+  "system": {
+    "protocol": "http",
+    "host": "localhost",
+    "logging": {
+      "level": "info",
+      "timestamps": false
     },
-    "96566631423": {
-      "userId": 4,
-      "username": ""
+    "admin": {
+      "phoneNumber": "1234567890",
+      "seerrUserId": 1
     }
   },
-  "command": "r,request,s,search",
-  "command4k": "r4k,request4k"
+  "services": {
+    "jellyseerr": {
+      "port": 5055,
+      "apiKey": "YOUR_JELLYSEERR_API_KEY",
+      "defaultUserId": 2
+    },
+    "waha": {
+      "port": 8584,
+      "apiKey": "YOUR_WAHA_API_KEY",
+      "session": "default"
+    }
+  },
+  "webhook": {
+    "requests": {
+      "path": "/requests"
+    },
+    "seerr": {
+      "path": "/seerr"
+    }
+  },
+  "mappings": {
+    "//_userIdMappings_comment": "Map WAHA phone numbers to Jellyseerr user IDs. Use phone number without @c.us suffix as key. Each entry must have 'userId' (number) and 'username' (string) properties. LID format (@lid) is automatically resolved to phone number for lookup.",
+    "userIdMappings": {
+      "1234567890": {
+        "userId": 1,
+        "username": ""
+      }
+    },
+    "//_emailMappings_comment": "Map email addresses to Jellyseerr user IDs. Automatically populated when webhook notifications are received.",
+    "emailMappings": {},
+    "//_lidMappings_comment": "Map phone number format chatIds to LID format chatIds. This allows using LID format (more private) when sending messages. Format: \"phoneNumber@c.us\": \"lidNumber@lid\". Mappings are automatically created when LID format messages are received.",
+    "lidMappings": {}
+  },
+  "commands": {
+    "command": "r,request,s,search",
+    "command4k": "r4k,request4k",
+    "help4k": false
+  }
 }
-
-

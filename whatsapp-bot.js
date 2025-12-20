@@ -14,7 +14,7 @@ import { createLogger } from './lib/logger.js';
 
 // Import modules
 import { MAX_PROCESSED_MESSAGES } from './lib/constants.js';
-import { userSearchResults, pendingTvSelections, processedMessages, pendingRequestApprovals } from './lib/state.js';
+import { userSearchResults, pendingTvSelections, processedMessages } from './lib/state.js';
 import { formatSearchResults } from './lib/message-formatters.js';
 import { parseCommands, extractSearchQuery } from './lib/command-parser.js';
 import { handleTvSeasonSelection, handleTvShowSelection, handleMovieSelection } from './lib/request-handler.js';
@@ -94,96 +94,117 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     });
 
     if (!messageText) {
-      logger?.warn('Empty message text, ignoring');
+      logger?.debug('Empty message text, ignoring', { chatId, messageId });
       return;
     }
 
-    logger?.info(`📩 Message from ${chatId}: ${messageText}`);
+    logger?.info(`📩 Message received`, {
+      chatId,
+      messageId,
+      messageLength: messageText.length,
+      preview: messageText.length > 100 ? messageText.substring(0, 100) + '...' : messageText
+    });
 
-    // Check if admin is responding to a pending request approval
-    // Pending approvals are stored with phone format key (from config), but we need to handle
-    // both LID and phone formats for lookup since incoming messages may be in either format
-    let lookupChatId = chatId;
-    if (isLidFormat(chatId) && resolvedPhoneChatId) {
-      // Reuse phone number resolved earlier, or resolve now if not already resolved
-      if (pendingRequestApprovals.has(resolvedPhoneChatId)) {
-        lookupChatId = resolvedPhoneChatId;
-        logger?.debug('Found pending approval using phone format (resolved from LID)', {
-          originalChatId: chatId,
-          lookupChatId: resolvedPhoneChatId
-        });
-      }
-    }
-    // If phone format, use as-is (pending approvals are stored with phone format key)
+    // Normalize message for comparison (used in multiple checks)
+    const messageLower = messageText.toLowerCase().trim();
     
-    if (pendingRequestApprovals.has(lookupChatId)) {
-      const requestInfo = pendingRequestApprovals.get(lookupChatId);
-      const messageLower = messageText.toLowerCase().trim();
+    // Check if message is an approval/decline command with request ID
+    // Format: "approve 123" or "decline 123" (request ID is required)
+    const approveMatch = messageLower.match(/^approve\s+(\d+)$/);
+    const declineMatch = messageLower.match(/^decline\s+(\d+)$/);
+    
+    if (approveMatch || declineMatch) {
+      const isApprove = !!approveMatch;
+      const requestId = approveMatch?.[1] || declineMatch?.[1];
       
-      // Handle cancel/ignore (0)
-      if (messageLower === '0' || messageLower === 'cancel') {
-        logger?.info('Admin cancelled request approval', { requestId: requestInfo.requestId });
-        pendingRequestApprovals.delete(lookupChatId);
-        await sendMessage(wahaClient, cfg, chatId, '❌ Request approval cancelled');
+      logger?.info(`Approval/decline command detected`, {
+        command: isApprove ? 'approve' : 'decline',
+        requestId,
+        chatId
+      });
+      
+      // Validate that message is from admin
+      const adminPhoneNumber = cfg.jellyseerr?.adminDetails?.phoneNumber;
+      if (!adminPhoneNumber) {
+        logger?.warn('Admin phone number not configured, cannot process approval command', {
+          requestId,
+          chatId
+        });
         return;
       }
       
-      // Parse approve/decline commands: "approve 123" or "approve" or "approve123"
-      const approveMatch = messageLower.match(/^approve\s*(\d+)?$/);
-      const declineMatch = messageLower.match(/^decline\s*(\d+)?$/);
+      const expectedAdminPhoneChatId = `${adminPhoneNumber}@c.us`;
+      let isAdmin = false;
       
-      if (approveMatch || declineMatch) {
-        const isApprove = !!approveMatch;
-        const requestIdFromMessage = (approveMatch?.[1] || declineMatch?.[1]);
-        
-        // Use request ID from message if provided, otherwise use stored one
-        const requestId = requestIdFromMessage || requestInfo.requestId;
-        
-        // Validate request ID matches stored one (if provided in message)
-        if (requestIdFromMessage && requestIdFromMessage !== requestInfo.requestId) {
-          await sendMessage(wahaClient, cfg, chatId, `❌ Request ID mismatch. Expected: ${requestInfo.requestId}`);
-          return;
+      logger?.debug('Validating admin access for approval command', {
+        chatId,
+        expectedAdminChatId: expectedAdminPhoneChatId,
+        isLidFormat: isLidFormat(chatId),
+        resolvedPhoneChatId
+      });
+      
+      // Check if sender is admin
+      if (chatId === expectedAdminPhoneChatId) {
+        isAdmin = true;
+        logger?.debug('Admin validation: direct phone format match');
+      } else if (isLidFormat(chatId) && resolvedPhoneChatId) {
+        if (resolvedPhoneChatId === expectedAdminPhoneChatId) {
+          isAdmin = true;
+          logger?.debug('Admin validation: resolved LID matches admin phone');
         }
-        
-        try {
-          if (isApprove) {
-            await approveRequest(jellyseerrClient, cfg, requestId, logger);
-            logger?.info(`✅ Admin approved request ${requestId}`, { 
-              requestId, 
-              subject: requestInfo.subject,
-              requestedBy: requestInfo.requestedBy
-            });
-            await sendMessage(wahaClient, cfg, chatId, `✅ Request approved!\n\n📋 ${requestInfo.subject}\n👤 Requested by: ${requestInfo.requestedBy}`);
-          } else {
-            await declineRequest(jellyseerrClient, cfg, requestId, logger);
-            logger?.info(`🚫 Admin declined request ${requestId}`, { 
-              requestId, 
-              subject: requestInfo.subject,
-              requestedBy: requestInfo.requestedBy
-            });
-            await sendMessage(wahaClient, cfg, chatId, `🚫 Request declined.\n\n📋 ${requestInfo.subject}\n👤 Requested by: ${requestInfo.requestedBy}`);
-          }
-          
-          // Remove from pending approvals (use lookupChatId which may be different format)
-          pendingRequestApprovals.delete(lookupChatId);
-        } catch (err) {
-          logger?.error(`Failed to ${isApprove ? 'approve' : 'decline'} request`, {
+      } else if (isLidFormat(chatId)) {
+        // Try to resolve LID if not already resolved
+        logger?.debug('Resolving LID format to phone number for admin validation');
+        const phoneNumber = await getPhoneNumberByLid(wahaClient, cfg, chatId);
+        if (phoneNumber === expectedAdminPhoneChatId) {
+          isAdmin = true;
+          logger?.debug('Admin validation: resolved LID matches admin phone');
+        }
+      }
+      
+      if (!isAdmin) {
+        logger?.warn('Non-admin user attempted approval command', {
+          chatId,
+          requestId,
+          command: isApprove ? 'approve' : 'decline',
+          messageText
+        });
+        await sendMessage(wahaClient, cfg, chatId, `❌ Only administrators can approve/decline requests.`);
+        return;
+      }
+      
+      logger?.info(`Admin validated, processing ${isApprove ? 'approval' : 'decline'}`, {
+        requestId,
+        adminChatId: expectedAdminPhoneChatId
+      });
+      
+      try {
+        if (isApprove) {
+          await approveRequest(jellyseerrClient, cfg, requestId, logger);
+          logger?.info(`✅ Request approved via text command`, {
             requestId,
-            error: err?.message || err,
-            stack: err?.stack
+            method: 'text',
+            adminChatId: expectedAdminPhoneChatId
           });
-          await sendMessage(wahaClient, cfg, chatId, `❌ Error: ${err?.message || 'Failed to process request'}`);
+          await sendMessage(wahaClient, cfg, chatId, `✅ Request ${requestId} approved!`);
+        } else {
+          await declineRequest(jellyseerrClient, cfg, requestId, logger);
+          logger?.info(`🚫 Request declined via text command`, {
+            requestId,
+            method: 'text',
+            adminChatId: expectedAdminPhoneChatId
+          });
+          await sendMessage(wahaClient, cfg, chatId, `🚫 Request ${requestId} declined.`);
         }
-        return;
+      } catch (err) {
+        logger?.error(`Failed to ${isApprove ? 'approve' : 'decline'} request via text command`, {
+          requestId,
+          method: 'text',
+          error: err?.message || err,
+          stack: err?.stack
+        });
+        await sendMessage(wahaClient, cfg, chatId, `❌ Error: ${err?.message || 'Failed to process request'}`);
       }
-      
-      // If message doesn't match approve/decline pattern, show help
-      await sendMessage(wahaClient, cfg, chatId, 
-        `📋 Pending request: ${requestInfo.subject}\n\n` +
-        `✅ React with ✅ or reply "approve ${requestInfo.requestId}" to approve\n` +
-        `🚫 React with ❌ or reply "decline ${requestInfo.requestId}" to decline\n` +
-        `0️⃣ Reply "0" to cancel`
-      );
       return;
     }
 
@@ -223,6 +244,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     }
 
     // Check if message is a number (selection from previous search)
+    // Note: "0" is handled as cancel in selection context, but as agent request when not in selection
     const selectionNumber = parseInt(messageText, 10);
     if (!isNaN(selectionNumber) && userSearchResults.has(chatId)) {
       logger?.info(`🔢 Selection from ${chatId}: ${selectionNumber}`);
@@ -348,8 +370,53 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       }
       
       helpText += '\n📝 Just type the command followed by the movie or show name.';
+      helpText += '\n\n💬 Need help? Reply "agent" to speak with an agent.';
       
       await sendMessage(wahaClient, cfg, chatId, helpText);
+      return;
+    }
+
+    // Check if user wants to speak with an agent (only when not in selection mode)
+    const isAgentRequest = messageLower === 'agent' && 
+                           !userSearchResults.has(chatId) && 
+                           !pendingTvSelections.has(chatId);
+    
+    if (isAgentRequest) {
+      logger?.info('User requested to speak with agent', { chatId });
+      
+      // Get user info for the notification
+      const username = await getUsernameFromChatId(cfg, chatId, wahaClient);
+      const userDisplayName = username || chatId;
+      
+      // Send confirmation to user
+      await sendMessage(wahaClient, cfg, chatId, '✅ Your request has been sent to an agent. They will respond shortly.');
+      
+      // Send notification to admin
+      const adminPhoneNumber = cfg.jellyseerr?.adminDetails?.phoneNumber;
+      if (adminPhoneNumber) {
+        const adminPhoneChatId = `${adminPhoneNumber}@c.us`;
+        const notificationMessage = `💬 Agent Request\n\n👤 User: ${userDisplayName}\n📱 Chat ID: ${chatId}\n\nUser requested to speak with an agent.`;
+        
+        try {
+          await sendMessage(wahaClient, cfg, adminPhoneChatId, notificationMessage);
+          logger?.info('Agent request notification sent to admin', {
+            userChatId: chatId,
+            username,
+            adminPhoneNumber
+          });
+        } catch (err) {
+          logger?.error('Failed to send agent request notification to admin', {
+            userChatId: chatId,
+            adminPhoneNumber,
+            error: err?.message || err,
+            stack: err?.stack
+          });
+        }
+      } else {
+        logger?.warn('Admin phone number not configured, cannot send agent request notification', {
+          userChatId: chatId
+        });
+      }
       return;
     }
 
