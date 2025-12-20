@@ -9,7 +9,7 @@
 
 import { createHttpClient, searchTitle, formatMedia } from './lib/request.js';
 import { createWahaClient, sendMessage } from './lib/waha-client.js';
-import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType } from './lib/utils.js';
+import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType, getUsernameFromChatId } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
 // Import modules
@@ -233,8 +233,15 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
     // Check if message is "help" command
     if (messageText.toLowerCase().trim() === 'help') {
+      // Get username from mappings if available
+      const username = await getUsernameFromChatId(cfg, chatId, wahaClient);
+      
       // Build help message
-      let helpText = '📌 Available Commands:\n\n';
+      // Always show greeting, include username if available
+      const greeting = username ? `👋 Hello ${username}!\n\n` : '👋 Hello!\n\n';
+      let helpText = greeting;
+      
+      helpText += '📌 Available Commands:\n\n';
       
       // Standard request section
       helpText += `🎬 Standard Request\n${primaryCommand} <name>\nExample: ${primaryCommand} Matrix\n`;
