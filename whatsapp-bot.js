@@ -8,22 +8,17 @@
  */
 
 import { createHttpClient, searchTitle, formatMedia } from './lib/request.js';
-import { createWahaClient, sendText, sendSeen } from './lib/waha-client.js';
+import { createWahaClient, sendMessage } from './lib/waha-client.js';
 import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
 // Import modules
-import { MAX_PROCESSED_MESSAGES, MAX_RESULTS_DISPLAY } from './lib/constants.js';
+import { MAX_PROCESSED_MESSAGES } from './lib/constants.js';
 import { userSearchResults, pendingTvSelections, processedMessages } from './lib/state.js';
 import { formatSearchResults } from './lib/message-formatters.js';
 import { parseCommands, extractSearchQuery } from './lib/command-parser.js';
-import { parseSeasonSelection, formatSeasons, filterOutSpecials, getSeasonNumber } from './lib/season-utils.js';
-import { isRequested, isAvailable, canBeRequested, checkSeasonRequestStatus, getRequestStatusMessage } from './lib/media-status.js';
 import { handleTvSeasonSelection, handleTvShowSelection, handleMovieSelection } from './lib/request-handler.js';
 import { createWebhookServer } from './lib/webhook-server.js';
-
-// Import MAX_RESULTS_DISPLAY from constants (already imported via message-formatters)
-
 
 /**
  * Handles incoming WhatsApp messages
@@ -60,13 +55,6 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       messageLength: messageText.length
     });
 
-    // Send seen before processing the message
-    try {
-      await sendSeen(wahaClient, cfg, chatId);
-    } catch (err) {
-      // Log error but continue processing
-      logger?.warn('Failed to send seen indicator', err?.message || err);
-    }
 
     // Check for duplicate messages early (before processing)
     if (messageId && processedMessages.has(messageId)) {
@@ -114,7 +102,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
       
-      // Support both old format (just the show object) and new format (object with show and is4k)
+      // Handle both simple object format and structured format with show and is4k
       const tvShow = (tvShowData && typeof tvShowData === 'object' && 'show' in tvShowData) ? tvShowData.show : tvShowData;
       const is4k = (tvShowData && typeof tvShowData === 'object' && 'is4k' in tvShowData) ? (tvShowData.is4k === true) : false;
       
@@ -122,7 +110,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         logger?.warn('Invalid TV show data in stored selection', { chatId });
         pendingTvSelections.delete(chatId);
         userSearchResults.delete(chatId);
-        await sendText(wahaClient, cfg, chatId, `❌ Invalid selection. Please search again.`);
+        await sendMessage(wahaClient, cfg, chatId, `❌ Invalid selection. Please search again.`);
         return;
       }
       
@@ -151,7 +139,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
       
-      // Support both old format (array) and new format (object with results, is4k, offset, query)
+      // Handle both array format and structured format with results, is4k, offset, query
       const results = Array.isArray(storedData) ? storedData : (storedData?.results || storedData);
       const storedIs4k = Array.isArray(storedData) ? false : (storedData?.is4k === true);
       const offset = Array.isArray(storedData) ? 0 : (storedData?.offset || 0);
@@ -160,7 +148,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       if (!results || !Array.isArray(results) || results.length === 0) {
         logger?.warn('Invalid or empty stored results', { chatId });
         userSearchResults.delete(chatId);
-        await sendText(wahaClient, cfg, chatId, `❌ No results available. Please search again.`);
+        await sendMessage(wahaClient, cfg, chatId, `❌ No results available. Please search again.`);
         return;
       }
       
@@ -170,7 +158,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       if (selectionNumber === 0) {
         logger?.info('🚫 Cancelled selection');
         userSearchResults.delete(chatId);
-        await sendText(wahaClient, cfg, chatId, `❌ Cancelled`);
+        await sendMessage(wahaClient, cfg, chatId, `❌ Cancelled`);
         return;
       }
       
@@ -194,7 +182,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           query
         });
         
-        await sendText(wahaClient, cfg, chatId, formatted.message);
+        await sendMessage(wahaClient, cfg, chatId, formatted.message);
         return;
       }
       
@@ -238,34 +226,36 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         // Invalid selection number
         const maxOption = showMoreOption || displayedCount;
         logger?.warn(`Invalid selection number ${selectionNumber}`, { validRange: `0-${maxOption}` });
-        await sendText(wahaClient, cfg, chatId, `❌ Invalid. Reply with 0-${maxOption} (0 = cancel)`);
+        await sendMessage(wahaClient, cfg, chatId, `❌ Invalid. Reply with 0-${maxOption} (0 = cancel)`);
         return;
       }
     }
 
-    // Check if message starts with any configured command (including 4K commands)
-    const searchResult = extractSearchQuery(messageText, searchCommands, searchCommands4k);
-    if (!searchResult) {
-      const allCommands = [...searchCommands, ...searchCommands4k];
-      const commandsList = allCommands.join('", "');
-      logger?.warn(`Message does not start with any command: "${commandsList}"`, { messageText });
-      
-      // Build help message with new format
+    // Check if message is "help" command
+    if (messageText.toLowerCase().trim() === 'help') {
+      // Build help message
       let helpText = '📌 Available Commands:\n\n';
       
       // Standard request section
-      const standardExample = searchCommands[0] || primaryCommand;
-      helpText += `🎬 Standard Request\n${standardExample} <name>\nExample: ${standardExample} Matrix\n`;
+      helpText += `🎬 Standard Request\n${primaryCommand} <name>\nExample: ${primaryCommand} Matrix\n`;
       
       // 4K request section (if configured and help4k is enabled)
-      if (cfg.help4k === true && searchCommands4k.length > 0) {
+      if (cfg.help4k && searchCommands4k.length > 0) {
         const fourKExample = searchCommands4k[0];
         helpText += `\n🖥️ 4K Request\n${fourKExample} <name>\nExample: ${fourKExample} Matrix\n`;
       }
       
       helpText += '\n📝 Just type the command followed by the movie or show name.';
       
-      await sendText(wahaClient, cfg, chatId, helpText);
+      await sendMessage(wahaClient, cfg, chatId, helpText);
+      return;
+    }
+
+    // Check if message starts with any configured command (including 4K commands)
+    const searchResult = extractSearchQuery(messageText, searchCommands, searchCommands4k);
+    if (!searchResult) {
+      // Message doesn't match any command and is not "help" - just ignore it
+      logger?.debug('Message does not match any command and is not "help", ignoring', { messageText });
       return;
     }
 
@@ -276,14 +266,14 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     // Handle empty query (user just typed command without search term)
     if (!query || query.trim().length === 0) {
       logger?.info(`Empty query after command "${searchResult.matchedCommand}"`);
-      await sendText(wahaClient, cfg, chatId, `💬 ${searchResult.matchedCommand} <name>\nExample: ${searchResult.matchedCommand} Matrix`);
+      await sendMessage(wahaClient, cfg, chatId, `💬 ${searchResult.matchedCommand} <name>\nExample: ${searchResult.matchedCommand} Matrix`);
       return;
     }
     
     logger?.info(`🔍 Searching: "${query}" (matched command: ${searchResult.matchedCommand})`);
 
     // Send searching message
-    await sendText(wahaClient, cfg, chatId, `🔍 Searching...`);
+    await sendMessage(wahaClient, cfg, chatId, `🔍 Searching...`);
 
     try {
       const candidates = await searchTitle(jellyseerrClient, cfg, query, null, null, logger);
@@ -291,7 +281,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
       if (!candidates || candidates.length === 0) {
         logger?.info(`🙈 No results for: "${query}"`);
-        await sendText(wahaClient, cfg, chatId, '❌ No results. Try different keywords.');
+        await sendMessage(wahaClient, cfg, chatId, '❌ No results. Try different keywords.');
         userSearchResults.delete(chatId);
         return;
       }
@@ -314,19 +304,23 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       // Format and send results (first page, offset 0, 8 results per page)
       const resultsPerPage = 8;
       const formatted = formatSearchResults(candidates, query, resultsPerPage, 0);
-      await sendText(wahaClient, cfg, chatId, formatted.message);
+      await sendMessage(wahaClient, cfg, chatId, formatted.message);
 
     } catch (err) {
       logger?.error(`Error searching for "${query}"`, err?.message || err);
-      logger?.debug('Search error stack', err?.stack);
+      if (err?.stack) {
+        logger?.debug('Search error stack', err.stack);
+      }
       const errorMsg = err?.message || 'Unknown error';
-      await sendText(wahaClient, cfg, chatId, `❌ Search error: ${errorMsg}`);
+      await sendMessage(wahaClient, cfg, chatId, `❌ Search error: ${errorMsg}`);
       userSearchResults.delete(chatId);
     }
 
   } catch (err) {
     logger?.error('Error handling message', err?.message || err);
-    logger?.debug('Handler error stack', err?.stack);
+    if (err?.stack) {
+      logger?.debug('Handler error stack', err.stack);
+    }
   }
 }
 
@@ -341,18 +335,18 @@ async function main() {
   const jellyseerrClient = createHttpClient(cfg.jellyseerr.apiBaseUrl);
   const wahaClient = createWahaClient(cfg.waha.baseUrl);
 
-  logger.info('🤖 Starting WhatsApp bot...');
-  logger.info(`🔗 Jellyseerr: ${cfg.jellyseerr.baseUrl}`);
-  logger.info(`🔗 WAHA: ${cfg.waha.baseUrl}`);
-  logger.info(`🧩 WAHA Session: ${cfg.waha?.session || 'default'}`);
+  logger?.info('🤖 Starting WhatsApp bot...');
+  logger?.info(`🔗 Jellyseerr: ${cfg.jellyseerr.baseUrl}`);
+  logger?.info(`🔗 WAHA: ${cfg.waha.baseUrl}`);
+  logger?.info(`🧩 WAHA Session: ${cfg.waha?.session || 'default'}`);
 
   const server = createWebhookServer(cfg, jellyseerrClient, wahaClient, handleMessage, getWebhookUrl);
 
   // Graceful shutdown handler
   const shutdown = () => {
-    logger.info('\n🛑 Shutting down…');
+    logger?.info('\n🛑 Shutting down…');
     server.close(() => {
-      logger.info('✅ Server closed.');
+      logger?.info('✅ Server closed.');
       process.exit(0);
     });
   };
@@ -367,8 +361,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       try { return loadConfig({ requireWaha: false, requireWebhook: false }); } catch { return {}; }
     })();
     const logger = createLogger(cfg);
-    logger.error('Fatal error', err?.message || err);
-    logger.debug('Fatal stack', err?.stack);
+    logger?.error('Fatal error', err?.message || err);
+    if (err?.stack) {
+      logger?.debug('Fatal stack', err.stack);
+    }
     process.exit(1);
   });
 }

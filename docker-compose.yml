@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   whatsapp-bot:
     build: .
@@ -8,9 +6,14 @@ services:
     ports:
       - "3006:3006"  # Webhook port (adjust if different in config)
     volumes:
-      - ./config:/config:ro  # Mount config directory as read-only
+      - ./config:/config  # Mount config directory as read-writable
+      - ./lib:/app/lib  # Mount lib directory for live code changes (writable)
+      - ./whatsapp-bot.js:/app/whatsapp-bot.js  # Mount main bot file (writable)
+      - ./cli.js:/app/cli.js  # Mount CLI file (writable)
+      - ./scripts:/app/scripts  # Mount scripts directory (writable)
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
+    command: node --watch whatsapp-bot.js  # Use watch mode for live reload
     networks:
       - whatsapp-network
 
