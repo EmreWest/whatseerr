@@ -1,0 +1,67 @@
+{
+    "NONE": {
+      "value": 0,
+      "name": "No Notification",
+      "description": "No notification (placeholder value)"
+    },
+    "MEDIA_PENDING": {
+      "value": 2,
+      "name": "Request Pending Approval",
+      "description": "Sent when users submit new media requests which require approval"
+    },
+    "MEDIA_APPROVED": {
+      "value": 4,
+      "name": "Request Approved",
+      "description": "Sent when media requests are manually approved"
+    },
+    "MEDIA_AVAILABLE": {
+      "value": 8,
+      "name": "Request Available",
+      "description": "Sent when media requests become available"
+    },
+    "MEDIA_FAILED": {
+      "value": 16,
+      "name": "Request Processing Failed",
+      "description": "Sent when media requests fail to be added to Radarr or Sonarr"
+    },
+    "TEST_NOTIFICATION": {
+      "value": 32,
+      "name": "Test Notification",
+      "description": "Used for testing notification configurations"
+    },
+    "MEDIA_DECLINED": {
+      "value": 64,
+      "name": "Request Declined",
+      "description": "Sent when media requests are declined"
+    },
+    "MEDIA_AUTO_APPROVED": {
+      "value": 128,
+      "name": "Request Automatically Approved",
+      "description": "Sent when users submit new media requests which are automatically approved"
+    },
+    "ISSUE_CREATED": {
+      "value": 256,
+      "name": "Issue Reported",
+      "description": "Sent when issues are reported"
+    },
+    "ISSUE_COMMENT": {
+      "value": 512,
+      "name": "Issue Comment",
+      "description": "Sent when issues receive new comments"
+    },
+    "ISSUE_RESOLVED": {
+      "value": 1024,
+      "name": "Issue Resolved",
+      "description": "Sent when issues are resolved"
+    },
+    "ISSUE_REOPENED": {
+      "value": 2048,
+      "name": "Issue Reopened",
+      "description": "Sent when issues are reopened"
+    },
+    "MEDIA_AUTO_REQUESTED": {
+      "value": 4096,
+      "name": "Request Automatically Submitted",
+      "description": "Sent when new media requests are automatically submitted for items on a user's watchlist"
+    }
+  }

@@ -22,6 +22,8 @@
     "timestamps": false
   },
   "//_userIdMappings_comment": "Map WAHA phone numbers to Jellyseerr user IDs. Use phone number without @c.us suffix as key. Each entry must have 'userId' (number) and 'username' (string) properties. LID format (@lid) is automatically resolved to phone number for lookup.",
+  "//_lidMappings_comment": "Map phone number format chatIds to LID format chatIds. This allows using LID format (more private) when sending messages. Format: \"phoneNumber@c.us\": \"lidNumber@lid\". Mappings are automatically created when LID format messages are received.",
+  "lidMappings": {},
   "userIdMappings": {
     "96566674323": {
       "userId": 2,

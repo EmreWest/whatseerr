@@ -7,14 +7,14 @@
  * and sends formatted responses back to users.
  */
 
-import { createHttpClient, searchTitle, formatMedia } from './lib/request.js';
-import { createWahaClient, sendMessage } from './lib/waha-client.js';
-import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType, getUsernameFromChatId } from './lib/utils.js';
+import { createHttpClient, searchTitle, formatMedia, approveRequest, declineRequest } from './lib/request.js';
+import { createWahaClient, sendMessage, getPhoneNumberByLid } from './lib/waha-client.js';
+import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType, getUsernameFromChatId, setLidMapping } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
 // Import modules
 import { MAX_PROCESSED_MESSAGES } from './lib/constants.js';
-import { userSearchResults, pendingTvSelections, processedMessages } from './lib/state.js';
+import { userSearchResults, pendingTvSelections, processedMessages, pendingRequestApprovals } from './lib/state.js';
 import { formatSearchResults } from './lib/message-formatters.js';
 import { parseCommands, extractSearchQuery } from './lib/command-parser.js';
 import { handleTvSeasonSelection, handleTvShowSelection, handleMovieSelection } from './lib/request-handler.js';
@@ -46,11 +46,19 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     const messageText = payload.body?.trim() || '';
     const messageId = payload.id;
 
-    // Log LID format detection for debugging
-    const isLid = isLidFormat(chatId);
+    // Auto-create LID mapping if we receive LID format and can resolve it
+    // Also resolve to phone number for potential reuse in pending approvals lookup
+    let resolvedPhoneChatId = null;
+    if (isLidFormat(chatId)) {
+      resolvedPhoneChatId = await getPhoneNumberByLid(wahaClient, cfg, chatId);
+      if (resolvedPhoneChatId) {
+        setLidMapping(cfg, resolvedPhoneChatId, chatId, logger);
+      }
+    }
+    
     logger?.debug('Message received', {
       chatId,
-      isLidFormat: isLid,
+      isLidFormat: isLidFormat(chatId),
       messageId,
       messageLength: messageText.length
     });
@@ -78,7 +86,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       chatId,
       messageId,
       messageText,
-      isLidFormat: isLid,
+      isLidFormat: isLidFormat(chatId),
       fromMe: payload.fromMe,
       to: payload.to,
       event: webhookData.event,
@@ -91,6 +99,93 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     }
 
     logger?.info(`📩 Message from ${chatId}: ${messageText}`);
+
+    // Check if admin is responding to a pending request approval
+    // Pending approvals are stored with phone format key (from config), but we need to handle
+    // both LID and phone formats for lookup since incoming messages may be in either format
+    let lookupChatId = chatId;
+    if (isLidFormat(chatId) && resolvedPhoneChatId) {
+      // Reuse phone number resolved earlier, or resolve now if not already resolved
+      if (pendingRequestApprovals.has(resolvedPhoneChatId)) {
+        lookupChatId = resolvedPhoneChatId;
+        logger?.debug('Found pending approval using phone format (resolved from LID)', {
+          originalChatId: chatId,
+          lookupChatId: resolvedPhoneChatId
+        });
+      }
+    }
+    // If phone format, use as-is (pending approvals are stored with phone format key)
+    
+    if (pendingRequestApprovals.has(lookupChatId)) {
+      const requestInfo = pendingRequestApprovals.get(lookupChatId);
+      const messageLower = messageText.toLowerCase().trim();
+      
+      // Handle cancel/ignore (0)
+      if (messageLower === '0' || messageLower === 'cancel') {
+        logger?.info('Admin cancelled request approval', { requestId: requestInfo.requestId });
+        pendingRequestApprovals.delete(lookupChatId);
+        await sendMessage(wahaClient, cfg, chatId, '❌ Request approval cancelled');
+        return;
+      }
+      
+      // Parse approve/decline commands: "approve 123" or "approve" or "approve123"
+      const approveMatch = messageLower.match(/^approve\s*(\d+)?$/);
+      const declineMatch = messageLower.match(/^decline\s*(\d+)?$/);
+      
+      if (approveMatch || declineMatch) {
+        const isApprove = !!approveMatch;
+        const requestIdFromMessage = (approveMatch?.[1] || declineMatch?.[1]);
+        
+        // Use request ID from message if provided, otherwise use stored one
+        const requestId = requestIdFromMessage || requestInfo.requestId;
+        
+        // Validate request ID matches stored one (if provided in message)
+        if (requestIdFromMessage && requestIdFromMessage !== requestInfo.requestId) {
+          await sendMessage(wahaClient, cfg, chatId, `❌ Request ID mismatch. Expected: ${requestInfo.requestId}`);
+          return;
+        }
+        
+        try {
+          if (isApprove) {
+            await approveRequest(jellyseerrClient, cfg, requestId, logger);
+            logger?.info(`✅ Admin approved request ${requestId}`, { 
+              requestId, 
+              subject: requestInfo.subject,
+              requestedBy: requestInfo.requestedBy
+            });
+            await sendMessage(wahaClient, cfg, chatId, `✅ Request approved!\n\n📋 ${requestInfo.subject}\n👤 Requested by: ${requestInfo.requestedBy}`);
+          } else {
+            await declineRequest(jellyseerrClient, cfg, requestId, logger);
+            logger?.info(`🚫 Admin declined request ${requestId}`, { 
+              requestId, 
+              subject: requestInfo.subject,
+              requestedBy: requestInfo.requestedBy
+            });
+            await sendMessage(wahaClient, cfg, chatId, `🚫 Request declined.\n\n📋 ${requestInfo.subject}\n👤 Requested by: ${requestInfo.requestedBy}`);
+          }
+          
+          // Remove from pending approvals (use lookupChatId which may be different format)
+          pendingRequestApprovals.delete(lookupChatId);
+        } catch (err) {
+          logger?.error(`Failed to ${isApprove ? 'approve' : 'decline'} request`, {
+            requestId,
+            error: err?.message || err,
+            stack: err?.stack
+          });
+          await sendMessage(wahaClient, cfg, chatId, `❌ Error: ${err?.message || 'Failed to process request'}`);
+        }
+        return;
+      }
+      
+      // If message doesn't match approve/decline pattern, show help
+      await sendMessage(wahaClient, cfg, chatId, 
+        `📋 Pending request: ${requestInfo.subject}\n\n` +
+        `✅ Reply "approve ${requestInfo.requestId}" to approve\n` +
+        `🚫 Reply "decline ${requestInfo.requestId}" to decline\n` +
+        `0️⃣ Reply "0" to cancel`
+      );
+      return;
+    }
 
     // Check if user is selecting seasons for a TV show
     if (pendingTvSelections.has(chatId)) {
