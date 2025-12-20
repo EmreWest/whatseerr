@@ -9,11 +9,11 @@
 
 import { createHttpClient, searchTitle, formatMedia, approveRequest, declineRequest } from './lib/request.js';
 import { createWahaClient, sendMessage, getPhoneNumberByLid } from './lib/waha-client.js';
-import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType, getUsernameFromChatId, setLidMapping } from './lib/utils.js';
+import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType, getUsernameFromChatId, setLidMapping, isAdminChatId } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
 // Import modules
-import { MAX_PROCESSED_MESSAGES } from './lib/constants.js';
+import { MAX_PROCESSED_MESSAGES, RESULTS_PER_PAGE } from './lib/constants.js';
 import { userSearchResults, pendingTvSelections, processedMessages } from './lib/state.js';
 import { formatSearchResults } from './lib/message-formatters.js';
 import { parseCommands, extractSearchQuery } from './lib/command-parser.js';
@@ -27,7 +27,6 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
   const logger = cfg.__logger;
   const searchCommands = parseCommands(cfg.command);
   const searchCommands4k = parseCommands(cfg.command4k);
-  const primaryCommand = searchCommands[0] || 'r';
   try {
     // Extract message data from WAHA webhook payload
     const payload = webhookData.payload;
@@ -47,10 +46,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     const messageId = payload.id;
 
     // Auto-create LID mapping if we receive LID format and can resolve it
-    // Also resolve to phone number for potential reuse in pending approvals lookup
-    let resolvedPhoneChatId = null;
     if (isLidFormat(chatId)) {
-      resolvedPhoneChatId = await getPhoneNumberByLid(wahaClient, cfg, chatId);
+      const resolvedPhoneChatId = await getPhoneNumberByLid(wahaClient, cfg, chatId);
       if (resolvedPhoneChatId) {
         setLidMapping(cfg, resolvedPhoneChatId, chatId, logger);
       }
@@ -124,43 +121,13 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       });
       
       // Validate that message is from admin
-      const adminPhoneNumber = cfg.jellyseerr?.adminDetails?.phoneNumber;
-      if (!adminPhoneNumber) {
-        logger?.warn('Admin phone number not configured, cannot process approval command', {
-          requestId,
-          chatId
-        });
-        return;
-      }
-      
-      const expectedAdminPhoneChatId = `${adminPhoneNumber}@c.us`;
-      let isAdmin = false;
+      const isAdmin = await isAdminChatId(cfg, chatId, wahaClient, logger);
       
       logger?.debug('Validating admin access for approval command', {
         chatId,
-        expectedAdminChatId: expectedAdminPhoneChatId,
-        isLidFormat: isLidFormat(chatId),
-        resolvedPhoneChatId
+        isAdmin,
+        isLidFormat: isLidFormat(chatId)
       });
-      
-      // Check if sender is admin
-      if (chatId === expectedAdminPhoneChatId) {
-        isAdmin = true;
-        logger?.debug('Admin validation: direct phone format match');
-      } else if (isLidFormat(chatId) && resolvedPhoneChatId) {
-        if (resolvedPhoneChatId === expectedAdminPhoneChatId) {
-          isAdmin = true;
-          logger?.debug('Admin validation: resolved LID matches admin phone');
-        }
-      } else if (isLidFormat(chatId)) {
-        // Try to resolve LID if not already resolved
-        logger?.debug('Resolving LID format to phone number for admin validation');
-        const phoneNumber = await getPhoneNumberByLid(wahaClient, cfg, chatId);
-        if (phoneNumber === expectedAdminPhoneChatId) {
-          isAdmin = true;
-          logger?.debug('Admin validation: resolved LID matches admin phone');
-        }
-      }
       
       if (!isAdmin) {
         logger?.warn('Non-admin user attempted approval command', {
@@ -175,7 +142,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       
       logger?.info(`Admin validated, processing ${isApprove ? 'approval' : 'decline'}`, {
         requestId,
-        adminChatId: expectedAdminPhoneChatId
+        adminChatId: chatId
       });
       
       try {
@@ -184,7 +151,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           logger?.info(`✅ Request approved via text command`, {
             requestId,
             method: 'text',
-            adminChatId: expectedAdminPhoneChatId
+            adminChatId: chatId
           });
           await sendMessage(wahaClient, cfg, chatId, `✅ Request ${requestId} approved!`);
         } else {
@@ -192,7 +159,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           logger?.info(`🚫 Request declined via text command`, {
             requestId,
             method: 'text',
-            adminChatId: expectedAdminPhoneChatId
+            adminChatId: chatId
           });
           await sendMessage(wahaClient, cfg, chatId, `🚫 Request ${requestId} declined.`);
         }
@@ -257,10 +224,11 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       }
       
       // Handle both array format and structured format with results, is4k, offset, query
-      const results = Array.isArray(storedData) ? storedData : (storedData?.results || storedData);
-      const storedIs4k = Array.isArray(storedData) ? false : (storedData?.is4k === true);
-      const offset = Array.isArray(storedData) ? 0 : (storedData?.offset || 0);
-      const query = Array.isArray(storedData) ? '' : (storedData?.query || '');
+      const isArrayFormat = Array.isArray(storedData);
+      const results = isArrayFormat ? storedData : (storedData?.results || storedData);
+      const storedIs4k = isArrayFormat ? false : (storedData?.is4k === true);
+      const offset = isArrayFormat ? 0 : (storedData?.offset || 0);
+      const query = isArrayFormat ? '' : (storedData?.query || '');
       
       if (!results || !Array.isArray(results) || results.length === 0) {
         logger?.warn('Invalid or empty stored results', { chatId });
@@ -279,9 +247,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         return;
       }
       
-      // Calculate displayed count and check for "Show more" option (8 results per page, option 9 for next page)
-      const resultsPerPage = 8;
-      const displayedCount = Math.min(resultsPerPage, results.length - offset);
+      // Calculate displayed count and check for "Show more" option
+      const displayedCount = Math.min(RESULTS_PER_PAGE, results.length - offset);
       const hasMore = (offset + displayedCount) < results.length;
       const showMoreOption = hasMore ? displayedCount + 1 : null;
       
@@ -289,7 +256,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       if (showMoreOption && selectionNumber === showMoreOption) {
         logger?.info(`📄 Showing more results (offset: ${offset + displayedCount})`);
         const nextOffset = offset + displayedCount;
-        const formatted = formatSearchResults(results, query, resultsPerPage, nextOffset);
+        const formatted = formatSearchResults(results, query, RESULTS_PER_PAGE, nextOffset);
         
         // Update stored data with new offset
         userSearchResults.set(chatId, {
@@ -307,7 +274,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       if (selectionNumber >= 1 && selectionNumber <= displayedCount) {
         const actualIndex = offset + selectionNumber - 1; // Convert display number to actual array index
         const chosen = results[actualIndex];
-        const { title: chosenTitle, year: chosenYear, typeStr } = formatMedia(chosen);
+        const { title: chosenTitle, typeStr } = formatMedia(chosen);
         const isTvShow = typeStr === 'TV' || chosen.mediaType === 2 || chosen.mediaType === 'tv';
 
         // For TV shows, use the handler function
@@ -361,6 +328,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       helpText += '📌 Available Commands:\n\n';
       
       // Standard request section
+      const primaryCommand = searchCommands[0] || 'r';
       helpText += `🎬 Standard Request\n${primaryCommand} <name>\nExample: ${primaryCommand} Matrix\n`;
       
       // 4K request section (if configured and help4k is enabled)
@@ -391,7 +359,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       // Send confirmation to user
       await sendMessage(wahaClient, cfg, chatId, '✅ Your request has been sent to an agent. They will respond shortly.');
       
-      // Send notification to admin
+      // Send notification to admin (sendMessage handles LID conversion internally)
       const adminPhoneNumber = cfg.jellyseerr?.adminDetails?.phoneNumber;
       if (adminPhoneNumber) {
         const adminPhoneChatId = `${adminPhoneNumber}@c.us`;
@@ -470,9 +438,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         ...identifierInfo
       });
 
-      // Format and send results (first page, offset 0, 8 results per page)
-      const resultsPerPage = 8;
-      const formatted = formatSearchResults(candidates, query, resultsPerPage, 0);
+      // Format and send results (first page, offset 0)
+      const formatted = formatSearchResults(candidates, query, RESULTS_PER_PAGE, 0);
       await sendMessage(wahaClient, cfg, chatId, formatted.message);
 
     } catch (err) {
