@@ -180,8 +180,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       // If message doesn't match approve/decline pattern, show help
       await sendMessage(wahaClient, cfg, chatId, 
         `📋 Pending request: ${requestInfo.subject}\n\n` +
-        `✅ Reply "approve ${requestInfo.requestId}" to approve\n` +
-        `🚫 Reply "decline ${requestInfo.requestId}" to decline\n` +
+        `✅ React with ✅ or reply "approve ${requestInfo.requestId}" to approve\n` +
+        `🚫 React with ❌ or reply "decline ${requestInfo.requestId}" to decline\n` +
         `0️⃣ Reply "0" to cancel`
       );
       return;
