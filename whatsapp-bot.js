@@ -13,6 +13,7 @@ import { createLogger } from './lib/logger.js';
 import { createServer } from './lib/server.js';
 import { createStateManager } from './lib/state/cache-state.js';
 import { createQueueManager, getQueueManager } from './lib/queue/message-queue.js';
+import { createSubscriptionManager } from './lib/subscriptions/subscription-manager.js';
 import { createCommandRegistry, getCommandRegistry } from './lib/commands/index.js';
 import { createMiddlewarePipeline } from './lib/middleware/index.js';
 import { sendMessage } from './lib/waha-client.js';
@@ -120,9 +121,10 @@ async function main() {
   cfg.__logger = createLogger(cfg);
   const logger = cfg.__logger;
   
-  // Initialize state manager and queue manager
+  // Initialize state manager, queue manager, and subscription manager
   createStateManager(cfg);
   createQueueManager(cfg);
+  createSubscriptionManager(logger);
   
   const jellyseerrClient = createHttpClient(cfg.jellyseerr.apiBaseUrl);
   const wahaClient = createWahaClient(cfg.waha.baseUrl);
