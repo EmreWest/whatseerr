@@ -12,7 +12,7 @@ import { loadConfig, isLidFormat, setLidMapping } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 import { createServer } from './lib/server.js';
 import { createStateManager } from './lib/state/cache-state.js';
-import { createQueueManager } from './lib/queue/message-queue.js';
+import { createQueueManager, getQueueManager } from './lib/queue/message-queue.js';
 import { createCommandRegistry, getCommandRegistry } from './lib/commands/index.js';
 import { createMiddlewarePipeline } from './lib/middleware/index.js';
 import { sendMessage } from './lib/waha-client.js';
@@ -140,7 +140,10 @@ async function main() {
     logger?.info('\n🛑 Shutting down…');
     try {
       await server.close();
+      const queueManager = getQueueManager();
+      queueManager.destroy(); // Clean up queue manager and timers
       logger?.info('✅ Server closed.');
+      logger?.info('✅ Queue manager cleaned up.');
       process.exit(0);
     } catch (err) {
       logger?.error('Error during shutdown', err?.message || err);
