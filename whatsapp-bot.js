@@ -42,6 +42,10 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     const chatId = payload.from;
     const messageText = payload.body || '';
     const messageId = payload.id;
+    // Extract timestamp from payload (WhatsApp timestamps are in seconds, convert to ms)
+    const messageTimestamp = payload.timestamp 
+      ? (payload.timestamp < 1000000000000 ? payload.timestamp * 1000 : payload.timestamp)
+      : Date.now(); // Fallback to current time if timestamp missing
 
     // Auto-create LID mapping if we receive LID format and can resolve it
     if (isLidFormat(chatId)) {
@@ -57,6 +61,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       chatId,
       messageId,
       messageText,
+      messageTimestamp, // Add timestamp for race condition prevention
       jellyseerrClient,
       wahaClient,
       logger,
@@ -90,12 +95,22 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     const commandMatch = commandRegistry.findCommand(context.messageText, context);
 
     if (!commandMatch) {
-      // No command matched - ignore the message
-      logger?.debug('Message does not match any command, ignoring', { 
-        messageText: context.messageText 
+      // No command matched - ignore the message (this is expected for non-command messages)
+      logger?.debug('No command matched - message does not match any command pattern, ignoring', { 
+        messageText: context.messageText?.substring(0, 100) || '(empty)',
+        chatId,
+        messageLength: context.messageText?.length || 0
       });
       return;
     }
+    
+    // Log matched command with details
+    logger?.info('🎯 Command matched', {
+      chatId,
+      commandName: commandMatch.command.name,
+      commandDescription: commandMatch.command.description,
+      matchResult: commandMatch.matchResult
+    });
     
     // Execute the matched command
     await commandRegistry.executeCommand(
