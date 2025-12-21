@@ -9,7 +9,7 @@
 
 import { createHttpClient, searchTitle, formatMedia, approveRequest, declineRequest } from './lib/request.js';
 import { createWahaClient, sendMessage, getPhoneNumberByLid } from './lib/waha-client.js';
-import { loadConfig, getWebhookUrl, isLidFormat, getIdentifierType, getUsernameFromChatId, setLidMapping, isAdminChatId } from './lib/utils.js';
+import { loadConfig, getWebhookUrl, isLidFormat, getUsernameFromChatId, setLidMapping, isAdminChatId } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 
 // Import modules
@@ -283,11 +283,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
           if (result) {
             // Store with is4k flag for season selection
             pendingTvSelections.set(chatId, { show: result, is4k: storedIs4k });
-            const identifierInfo = getIdentifierType(chatId);
-            logger?.debug('Stored TV selection [USES LID FORMAT]', {
-              chatId,
-              ...identifierInfo
-            });
+            logger?.debug('Stored TV selection', { chatId });
           } else {
             // Handled (already requested/available or error)
             userSearchResults.delete(chatId);
@@ -300,11 +296,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
 
         // Clear stored results
         userSearchResults.delete(chatId);
-        const identifierInfo = getIdentifierType(chatId);
-        logger?.debug('Cleared stored results for user [USES LID FORMAT]', { 
-          chatId,
-          ...identifierInfo
-        });
+        logger?.debug('Cleared stored results for user', { chatId });
         return;
       } else {
         // Invalid selection number
@@ -430,12 +422,10 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         offset: 0, 
         query 
       });
-      const identifierInfo = getIdentifierType(chatId);
-      logger?.debug('Stored results [USES LID FORMAT]', { 
+      logger?.debug('Stored results', { 
         chatId, 
         count: candidates.length, 
-        is4k,
-        ...identifierInfo
+        is4k
       });
 
       // Format and send results (first page, offset 0)
