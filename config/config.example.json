@@ -26,7 +26,8 @@
   },
   "webhook": {
     "requests": {
-      "path": "/requests"
+      "path": "/requests",
+      "port": 3006
     },
     "seerr": {
       "path": "/seerr"
@@ -53,7 +54,8 @@
   "cache": {
     "searchResultsTTL": 3600,
     "pendingSelectionsTTL": 1800,
-    "processedMessagesTTL": 86400
+    "processedMessagesTTL": 86400,
+    "promptTimestampsTTL": 3600
   },
   "queues": {
     "messageConcurrency": 5,
