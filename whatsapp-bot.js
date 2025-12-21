@@ -139,7 +139,7 @@ async function main() {
   // Initialize state manager, queue manager, and subscription manager
   createStateManager(cfg);
   createQueueManager(cfg);
-  createSubscriptionManager(logger);
+  createSubscriptionManager(logger, cfg);
   
   const jellyseerrClient = createHttpClient(cfg.jellyseerr.apiBaseUrl);
   const wahaClient = createWahaClient(cfg.waha.baseUrl);
