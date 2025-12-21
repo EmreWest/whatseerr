@@ -50,7 +50,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
         setLidMapping(cfg, resolvedPhoneChatId, chatId, logger);
       }
     }
-
+    
     // Create context for middleware and commands
     const context = {
       cfg,
@@ -63,7 +63,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       skip: false,
       error: null
     };
-
+    
     // Run middleware pipeline
     const middlewarePipeline = createMiddlewarePipeline(cfg, wahaClient, logger);
     await middlewarePipeline(context);
@@ -96,7 +96,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       });
       return;
     }
-
+    
     // Execute the matched command
     await commandRegistry.executeCommand(
       commandMatch.command,
@@ -110,8 +110,8 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       chatId: payload?.from,
       messageId: payload?.id
     });
+    }
   }
-}
 
 /**
  * Main function
