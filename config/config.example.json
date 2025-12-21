@@ -49,5 +49,19 @@
     "command": "r,request,s,search",
     "command4k": "r4k,request4k",
     "help4k": false
+  },
+  "cache": {
+    "searchResultsTTL": 3600,
+    "pendingSelectionsTTL": 1800,
+    "processedMessagesTTL": 86400
+  },
+  "queues": {
+    "messageConcurrency": 5,
+    "apiConcurrency": 3,
+    "webhookConcurrency": 10
+  },
+  "rateLimit": {
+    "maxRequests": 100,
+    "timeWindow": "1 minute"
   }
 }

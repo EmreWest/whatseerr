@@ -7,7 +7,9 @@
     "notifyuser": {
         "username": "{{notifyuser_username}}",
         "email": "{{notifyuser_email}}",
-        "avatar": "{{notifyuser_avatar}}"
+        "avatar": "{{notifyuser_avatar}}",
+        "settings_discordId": "{{notifyuser_settings_discordId}}",
+        "settings_telegramChatId": "{{notifyuser_settings_telegramChatId}}"
     },
     "{{media}}": {
         "media_type": "{{media_type}}",
@@ -20,7 +22,27 @@
         "request_id": "{{request_id}}",
         "requestedBy_username": "{{requestedBy_username}}",
         "requestedBy_email": "{{requestedBy_email}}",
-        "requestedBy_avatar": "{{requestedBy_avatar}}"
+        "requestedBy_avatar": "{{requestedBy_avatar}}",
+        "requestedBy_settings_discordId": "{{requestedBy_settings_discordId}}",
+        "requestedBy_settings_telegramChatId": "{{requestedBy_settings_telegramChatId}}"
+    },
+    "{{issue}}": {
+        "issue_id": "{{issue_id}}",
+        "issue_type": "{{issue_type}}",
+        "issue_status": "{{issue_status}}",
+        "reportedBy_username": "{{reportedBy_username}}",
+        "reportedBy_email": "{{reportedBy_email}}",
+        "reportedBy_avatar": "{{reportedBy_avatar}}",
+        "reportedBy_settings_discordId": "{{reportedBy_settings_discordId}}",
+        "reportedBy_settings_telegramChatId": "{{reportedBy_settings_telegramChatId}}"
+    },
+    "{{comment}}": {
+        "comment_message": "{{comment_message}}",
+        "commentedBy_username": "{{commentedBy_username}}",
+        "commentedBy_email": "{{commentedBy_email}}",
+        "commentedBy_avatar": "{{commentedBy_avatar}}",
+        "commentedBy_settings_discordId": "{{commentedBy_settings_discordId}}",
+        "commentedBy_settings_telegramChatId": "{{commentedBy_settings_telegramChatId}}"
     },
     "{{extra}}": []
 }
