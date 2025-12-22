@@ -8,7 +8,7 @@
 
 import { createHttpClient } from './lib/request.js';
 import { createWahaClient, getPhoneNumberByLid } from './lib/waha-client.js';
-import { loadConfig, isLidFormat, setLidMapping } from './lib/utils.js';
+import { loadConfig, isLidFormat, setLidMapping, isPhoneNumberConfigured } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 import { createServer } from './lib/server.js';
 import { createStateManager } from './lib/state/cache-state.js';
@@ -53,6 +53,13 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       if (resolvedPhoneChatId) {
         setLidMapping(cfg, resolvedPhoneChatId, chatId, logger);
       }
+    }
+
+    // Check if phone number is configured - ignore messages from non-configured numbers
+    const isConfigured = await isPhoneNumberConfigured(cfg, chatId, wahaClient);
+    if (!isConfigured) {
+      logger?.info('Ignoring message from non-configured phone number', { chatId, messageId });
+      return;
     }
     
     // Create context for middleware and commands
