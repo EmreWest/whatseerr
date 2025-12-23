@@ -19,8 +19,8 @@ cp config/config.example.json config.json
    - `host`: hostname/IP shared by Jellyseerr + WAHA + the bot webhook (example: `192.168.1.8`)
    - `jellyseerr.port`: Jellyseerr port (example: `5055`)
    - `jellyseerr.apiKey`: the API key you copied
-   - `jellyseerr.adminDetails.phoneNumber`: Admin's WhatsApp phone number (for approval notifications)
-   - `jellyseerr.adminDetails.seerrUserId`: Admin's Jellyseerr user ID
+   - `system.admin.phoneNumber`: Admin's WhatsApp phone number (for approval notifications)
+   - `system.admin.seerrUserId`: Admin's Jellyseerr user ID
    - `waha.port`: WAHA port (example: `8584`)
    - `waha.apiKey`: your WAHA API key
    - `waha.session`: WAHA session name (default: "default")
