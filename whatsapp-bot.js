@@ -58,7 +58,7 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
     // Check if phone number is configured - ignore messages from non-configured numbers
     const isConfigured = await isPhoneNumberConfigured(cfg, chatId, wahaClient);
     if (!isConfigured) {
-      logger?.info('Ignoring message from non-configured phone number', { chatId, messageId });
+      logger?.info('💬 (Ignored - user not configured)');
       return;
     }
     
@@ -111,13 +111,9 @@ async function handleMessage(cfg, jellyseerrClient, wahaClient, webhookData) {
       return;
     }
     
-    // Log matched command with details
-    logger?.info('🎯 Command matched', {
-      chatId,
-      commandName: commandMatch.command.name,
-      commandDescription: commandMatch.command.description,
-      matchResult: commandMatch.matchResult
-    });
+    // Log matched command
+    const commandName = commandMatch.command.name;
+    logger?.info(`🎯 Processing command: ${commandName}`);
     
     // Execute the matched command
     await commandRegistry.executeCommand(
