@@ -170,7 +170,7 @@ async function main() {
       logger?.info('✅ Queue manager cleaned up.');
       process.exit(0);
     } catch (err) {
-      logger?.error('Error during shutdown', err?.message || err);
+      logger?.error('Error during shutdown', getErrorDetails(err, 'shutdown'));
       process.exit(1);
     }
   };
