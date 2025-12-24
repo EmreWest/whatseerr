@@ -21,6 +21,7 @@ import { createHttpClient, searchTitle, createRequest, formatMedia, extractMedia
 import { loadConfig } from './lib/utils.js';
 import { createLogger } from './lib/logger.js';
 import { extractApiMessage } from './lib/api-message-extractor.js';
+import { getErrorDetails } from './lib/errors/error-formatter.js';
 
 function createReadline() {
   return readline.createInterface({
@@ -79,12 +80,10 @@ async function main() {
       try {
         candidates = await searchTitle(client, cfg, title, type, year, logger);
       } catch (err) {
-        logger.error(`Search failed for "${title}"`, err?.message || err);
-        if (err.response) {
-          logger.debug('Search error response', { status: err.response.status, body: err.response.data });
-        } else if (err.stack) {
-          logger.debug('Search error stack', err.stack);
-        }
+        logger.error(`Search failed for "${title}"`, {
+          ...getErrorDetails(err, 'searchTitle'),
+          title
+        });
         continue;
       }
 
@@ -164,12 +163,10 @@ async function main() {
           logger.debug('Unexpected response body', res.data);
         }
       } catch (err) {
-        logger.error('Failed to create request', err?.message || err);
-        if (err.response) {
-          logger.debug('Request error response', { status: err.response.status, body: err.response.data });
-        } else if (err.stack) {
-          logger.debug('Request error stack', err.stack);
-        }
+        logger.error('Failed to create request', {
+          ...getErrorDetails(err, 'createRequest'),
+          chosenTitle
+        });
       }
     }
   } finally {
@@ -180,7 +177,7 @@ async function main() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
     const logger = createLogger({ logging: { level: 'error' } });
-    logger.error('Fatal error', err?.message || err);
+    logger.error('Fatal error', getErrorDetails(err, 'cliMain'));
     process.exit(1);
   });
 }
