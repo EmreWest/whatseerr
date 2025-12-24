@@ -6,10 +6,6 @@
     "logging": {
       "level": "info",
       "timestamps": false
-    },
-    "admin": {
-      "phoneNumber": "1234567890",
-      "seerrUserId": 1
     }
   },
   "services": {
