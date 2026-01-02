@@ -1,7 +1,7 @@
 services:
   whatsapp-bot:
     build: .
-    container_name: whatsapprequestsbot-dev
+    container_name: whatseerr-bot-dev
     restart: unless-stopped
     ports:
       - "3006:3006"  # Webhook port
