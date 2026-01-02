@@ -79,6 +79,34 @@ The script will:
 
 ### Running with Docker
 
+#### Option 1: Using Pre-built Image from GitHub Container Registry (Recommended)
+
+1. **Pull the image:**
+   ```bash
+   docker pull ghcr.io/sufxgit/whatseerr:latest
+   ```
+
+2. **Prepare your configuration:**
+   ```bash
+   # Create a config directory
+   mkdir -p config
+
+   # Create your config file (copy from example in the repository)
+   nano config/config.json
+   ```
+
+3. **Run the container:**
+   ```bash
+   docker run -d \
+     --name whatseerr-bot \
+     --restart unless-stopped \
+     -p 3006:3006 \
+     -v $(pwd)/config:/config:ro \
+     ghcr.io/sufxgit/whatseerr:latest
+   ```
+
+#### Option 2: Building Locally
+
 1. **Prepare your configuration:**
    
    The container includes `config.example.json` at `/config/config.example.json`. You can either:
@@ -110,12 +138,14 @@ The script will:
    docker-compose restart
    ```
 
-2. **Build and run with Docker Compose:**
+2. **Build and run:**
+
+   **Using Docker Compose:**
    ```bash
    docker-compose up -d
    ```
 
-   Or build and run manually:
+   **Or build and run manually:**
    ```bash
    # Build the image
    docker build -t whatseerr-bot .
