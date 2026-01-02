@@ -101,7 +101,7 @@ The script will:
    docker-compose up -d
    
    # Copy example from container
-   docker cp whatsapp-requests-bot:/config/config.example.json config/config.json
+   docker cp whatseerr-bot:/config/config.example.json config/config.json
    
    # Edit the config file
    nano config/config.json
@@ -118,29 +118,29 @@ The script will:
    Or build and run manually:
    ```bash
    # Build the image
-   docker build -t whatsapp-requests-bot .
-   
+   docker build -t whatseerr-bot .
+
    # Run the container
    docker run -d \
-     --name whatsapp-requests-bot \
+     --name whatseerr-bot \
      --restart unless-stopped \
      -p 3006:3006 \
      -v $(pwd)/config:/config:ro \
-     whatsapp-requests-bot
+     whatseerr-bot
    ```
 
 3. **View logs:**
    ```bash
    docker-compose logs -f
    # or
-   docker logs -f whatsapp-requests-bot
+   docker logs -f whatseerr-bot
    ```
 
 4. **Stop the container:**
    ```bash
    docker-compose down
    # or
-   docker stop whatsapp-requests-bot
+   docker stop whatseerr-bot
    ```
 
 **Important:** 
