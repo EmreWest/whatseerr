@@ -1,6 +1,6 @@
 # Whatseerr
 
-WhatsApp bot for Seerr ([Jellyseerr](https://github.com/Fallenbagel/jellyseerr) / [Overseerr](https://github.com/sct/overseerr)) that allows users to search and request movies/TV shows via WhatsApp messages.
+WhatsApp bot for Seerr that allows users to search and request movies/TV shows via WhatsApp messages.
 
 ## Features
 
@@ -16,10 +16,14 @@ WhatsApp bot for Seerr ([Jellyseerr](https://github.com/Fallenbagel/jellyseerr) 
 ### Prerequisites
 
 - [WAHA](https://github.com/devlikeapro/waha) (WhatsApp HTTP API) running and configured
-- Seerr (Jellyseerr or Overseerr) instance
+- Seerr instance
 - Docker installed
 
 ### 1. Pull the Image and Run
+
+```bash
+docker pull ghcr.io/sufxgit/whatseerr:latest
+```
 
 #### Environment Variables
 
@@ -45,17 +49,26 @@ services:
 
 **Configuration Notes:**
 - On first run, a `config.example.json` will be created in your config directory
-- Copy it to `config.json` and update with your settings:
+- Rename it to `config.json` and update with your settings:
   - `host`: The hostname/IP where Seerr, WAHA, and the bot can reach each other
   - `jellyseerr.apiKey`: Get from Seerr → Settings → General
   - `waha.apiKey`: Your WAHA API key
   - `userIdMappings`: Map WhatsApp phone numbers (without @c.us) to Seerr user IDs
+    ```json
+    "1234567890": {
+      "userId": 1,
+      "username": ""
+    }
+    ```
+    - `"1234567890"`: WhatsApp phone number including country code (without @c.us suffix)
+    - `userId`: The user ID from your Seerr instance - each user has their own unique ID (found in Seerr → Users)
+    - `username`: Optional custom display name (leave empty to use Seerr username)
 
 **Unraid:**
 - Repository: `ghcr.io/sufxgit/whatseerr:latest`
 - Port: `3006:3006` (TCP)
 - Volume: `/mnt/user/appdata/whatseerr/config` → `/config` (Read/Write)
-- Environment: `TZ=Your/Timezone`
+- Variable: `TZ=Your/Timezone`
 
 ### 2. Configure WAHA Webhook
 
@@ -65,8 +78,9 @@ http://YOUR_HOST_IP:3006/requests
 ```
 
 Enable these events:
+- `session.status`
 - `message`
-- `message.any`
+- `message.reactions`
 
 ### 3. Configure Seerr Webhook (Optional)
 
