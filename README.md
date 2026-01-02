@@ -1,182 +1,239 @@
-## Jellyseerr Interactive Requester
+# Whatseerr
 
-This is a small Node.js script that lets you interactively search Jellyseerr and request movies or TV shows from the terminal, or via WhatsApp using WAHA.
+WhatsApp bot for [Jellyseerr](https://github.com/Fallenbagel/jellyseerr) / [Overseerr](https://github.com/sct/overseerr) that allows users to search and request movies/TV shows via WhatsApp messages.
 
-### Setup
+## Features
 
-1. Go to your Jellyseerr web UI and copy your **API key** from **Settings → General**.
-2. Create `config.json` from the example:
+- 🔍 Search movies and TV shows from WhatsApp
+- 📺 Request media directly via chat messages
+- 🔔 Receive webhook notifications from Jellyseerr/Overseerr
+- 👥 User mapping (WhatsApp phone numbers to Jellyseerr user IDs)
+- ⚡ Rate limiting and message queuing
+- 🎯 Support for 4K requests (optional)
 
-**For local development (non-Docker):**
-```bash
-cp config/config.example.json config.json
-```
+## Quick Start (Docker - Recommended)
 
-**For Docker:** See the [Docker section](#running-with-docker) below.
+### Prerequisites
 
-3. Edit `config.json` and set:
-   - `protocol`: `http` or `https`
-   - `host`: hostname/IP shared by Jellyseerr + WAHA + the bot webhook (example: `192.168.1.8`)
-   - `jellyseerr.port`: Jellyseerr port (example: `5055`)
-   - `jellyseerr.apiKey`: the API key you copied
-   - `mappings.userIdMappings`: Map phone numbers to Jellyseerr user IDs. Set `admin: true` for admin users.
-   - `waha.port`: WAHA port (example: `8584`)
-   - `waha.apiKey`: your WAHA API key
-   - `waha.session`: WAHA session name (default: "default")
-   - `webhook.requests.path`: webhook path for WAHA requests (default: `/requests`)
-   - `webhook.seerr.path`: webhook path for Jellyseerr notifications (default: `/seerr`)
-   - `logging.level`: `info` (default) or `debug`
-   - `command`: command prefix(es) for requests, comma-separated (default: `"r"`, example: `"r,request,s,search"`)
-   - `command4k`: command prefix(es) for 4K requests (optional)
-   - `help4k`: whether to show 4K commands in help (default: `false`)
+- [WAHA](https://github.com/devlikeapro/waha) (WhatsApp HTTP API) running and configured
+- Jellyseerr or Overseerr instance
+- Docker installed
 
-### Running CLI Version
-
-From this directory:
+### 1. Pull the Image
 
 ```bash
-node request.js
+docker pull ghcr.io/sufxgit/whatseerr:latest
 ```
 
-The script will:
+### 2. Create Configuration
 
-- Ask you for a **title** (movie or TV show).
-- Optionally ask for **type** (movie / TV) and **year** filter.
-- Show the **top results** from Jellyseerr.
-- Let you **pick a number** to send a request.
-- Loop so you can search again, until you press Enter on an empty title to quit.
+Create a directory for your config:
 
-### Running WhatsApp Bot
+```bash
+mkdir -p /path/to/config
+```
 
-1. **Start the bot server:**
+Create `/path/to/config/config.json` with the following structure:
+
+```json
+{
+  "system": {
+    "protocol": "http",
+    "host": "192.168.1.100",
+    "logging": {
+      "level": "info",
+      "timestamps": false
+    }
+  },
+  "services": {
+    "jellyseerr": {
+      "port": 5055,
+      "apiKey": "YOUR_JELLYSEERR_API_KEY",
+      "defaultUserId": 2
+    },
+    "waha": {
+      "port": 8584,
+      "apiKey": "YOUR_WAHA_API_KEY",
+      "session": "default"
+    }
+  },
+  "webhook": {
+    "requests": {
+      "path": "/requests",
+      "port": 3006
+    },
+    "seerr": {
+      "path": "/seerr"
+    }
+  },
+  "mappings": {
+    "userIdMappings": {
+      "1234567890": {
+        "userId": 1,
+        "username": "YourName"
+      }
+    },
+    "emailMappings": {},
+    "lidMappings": {}
+  },
+  "commands": {
+    "command": "r,request,s,search",
+    "command4k": "r4k,request4k",
+    "help4k": false
+  },
+  "cache": {
+    "searchResultsTTL": 3600,
+    "pendingSelectionsTTL": 1800,
+    "processedMessagesTTL": 86400,
+    "promptTimestampsTTL": 3600
+  },
+  "queues": {
+    "messageConcurrency": 5,
+    "apiConcurrency": 3,
+    "webhookConcurrency": 10
+  },
+  "rateLimit": {
+    "maxRequests": 100,
+    "timeWindow": "1 minute"
+  }
+}
+```
+
+**Configuration Notes:**
+- `host`: The hostname/IP where Jellyseerr, WAHA, and the bot can reach each other
+- `jellyseerr.apiKey`: Get from Jellyseerr → Settings → General
+- `waha.apiKey`: Your WAHA API key
+- `userIdMappings`: Map WhatsApp phone numbers (without @c.us) to Jellyseerr user IDs
+
+### 3. Run the Container
+
+**Docker CLI:**
+```bash
+docker run -d \
+  --name whatseerr-bot \
+  --restart unless-stopped \
+  -p 3006:3006 \
+  -v /path/to/config:/config \
+  -e TZ=Asia/Kuwait \
+  ghcr.io/sufxgit/whatseerr:latest
+```
+
+**Unraid:**
+- Repository: `ghcr.io/sufxgit/whatseerr:latest`
+- Port: `3006:3006` (TCP)
+- Volume: `/mnt/user/appdata/whatseerr/config` → `/config` (Read/Write)
+- Environment: `TZ=Your/Timezone`
+
+### 4. Configure WAHA Webhook
+
+Point your WAHA session webhook to:
+```
+http://YOUR_HOST_IP:3006/requests
+```
+
+Enable these events:
+- `message`
+- `message.any`
+
+### 5. Configure Jellyseerr Webhook (Optional)
+
+For receiving notifications (approved/available/declined), add webhook in Jellyseerr:
+
+**Webhook URL:**
+```
+http://YOUR_HOST_IP:3006/seerr
+```
+
+**Types:** Select notification types you want to receive
+
+## Usage
+
+Send a WhatsApp message to your WAHA-connected number:
+
+```
+r The Matrix
+```
+
+The bot will:
+1. Search Jellyseerr for "The Matrix"
+2. Return numbered results
+3. Wait for you to reply with a number (e.g., "1")
+4. Submit the request to Jellyseerr
+
+**Available Commands:**
+- `r <title>` or `request <title>` - Search and request media
+- `r4k <title>` or `request4k <title>` - Request in 4K quality (if enabled)
+
+## Configuration Options
+
+### System
+- `protocol`: `http` or `https`
+- `host`: Shared hostname/IP for all services
+- `logging.level`: `info` or `debug`
+
+### Services
+- `jellyseerr.port`: Jellyseerr port (default: 5055)
+- `jellyseerr.apiKey`: Your Jellyseerr API key
+- `jellyseerr.defaultUserId`: Default user ID for requests
+- `waha.port`: WAHA port (default: 8584)
+- `waha.apiKey`: WAHA API key
+- `waha.session`: WAHA session name (default: "default")
+
+### Webhooks
+- `webhook.requests.path`: Path for WAHA webhook (default: `/requests`)
+- `webhook.requests.port`: Webhook server port (default: 3006)
+- `webhook.seerr.path`: Path for Jellyseerr webhook (default: `/seerr`)
+
+### Mappings
+- `userIdMappings`: Map phone numbers to Jellyseerr user IDs
+- `emailMappings`: Auto-populated from webhook notifications
+- `lidMappings`: Auto-populated for WhatsApp LID format support
+
+### Commands
+- `command`: Comma-separated list of request command aliases
+- `command4k`: Comma-separated list of 4K request command aliases
+- `help4k`: Show 4K commands in help message (default: false)
+
+## Viewing Logs
+
+```bash
+docker logs -f whatseerr-bot
+```
+
+## Building from Source
+
+```bash
+git clone https://github.com/sufxgit/whatseerr.git
+cd whatseerr
+docker build -t whatseerr .
+```
+
+## Development
+
+For local development without Docker:
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/sufxgit/whatseerr.git
+   cd whatseerr
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Create config**
+   ```bash
+   cp config/config.example.json config/config.json
+   nano config/config.json
+   ```
+
+4. **Run the bot**
    ```bash
    npm run bot
    ```
-   or
-   ```bash
-   node whatsapp-bot.js
-   ```
 
-2. **Configure WAHA webhooks:**
-   
-   Option A - Use the helper script:
-   ```bash
-   npm run configure-webhook
-   ```
-   
-   Option B - Manual configuration:
-   - Open your WAHA dashboard (e.g., `http://localhost:8584`)
-   - Navigate to session settings
-   - Add webhook URL: `http(s)://<host>:3006<webhook.requests.path>` (default: `http(s)://<host>:3006/requests`)
-   - Enable events: `message`, `message.any`, `message.reaction` (for emoji approvals)
+## License
 
-3. **Usage via WhatsApp:**
-   - Send: `r The Matrix` (or your configured command)
-   - Bot will search and return numbered results
-   - Reply with a number (e.g., "1") to request that item
-
-**Note:** Make sure your bot server is accessible from WAHA. If WAHA is in Docker, ensure network connectivity.
-
-### Running with Docker
-
-#### Option 1: Using Pre-built Image from GitHub Container Registry (Recommended)
-
-1. **Pull the image:**
-   ```bash
-   docker pull ghcr.io/sufxgit/whatseerr:latest
-   ```
-
-2. **Prepare your configuration:**
-   ```bash
-   # Create a config directory
-   mkdir -p config
-
-   # Create your config file (copy from example in the repository)
-   nano config/config.json
-   ```
-
-3. **Run the container:**
-   ```bash
-   docker run -d \
-     --name whatseerr-bot \
-     --restart unless-stopped \
-     -p 3006:3006 \
-     -v $(pwd)/config:/config:ro \
-     ghcr.io/sufxgit/whatseerr:latest
-   ```
-
-#### Option 2: Building Locally
-
-1. **Prepare your configuration:**
-   
-   The container includes `config.example.json` at `/config/config.example.json`. You can either:
-   
-   **Option A: Use a mounted config folder (recommended)**
-   ```bash
-   # Create a config directory
-   mkdir -p config
-   
-   # Copy the example config from the container (after first run) or from the project
-   cp config/config.example.json config/config.json
-   
-   # Edit the config file
-   nano config/config.json  # or use your preferred editor
-   ```
-   
-   **Option B: Copy from container**
-   ```bash
-   # Start container once to get the example config
-   docker-compose up -d
-   
-   # Copy example from container
-   docker cp whatseerr-bot:/config/config.example.json config/config.json
-   
-   # Edit the config file
-   nano config/config.json
-   
-   # Restart container to use your config
-   docker-compose restart
-   ```
-
-2. **Build and run:**
-
-   **Using Docker Compose:**
-   ```bash
-   docker-compose up -d
-   ```
-
-   **Or build and run manually:**
-   ```bash
-   # Build the image
-   docker build -t whatseerr-bot .
-
-   # Run the container
-   docker run -d \
-     --name whatseerr-bot \
-     --restart unless-stopped \
-     -p 3006:3006 \
-     -v $(pwd)/config:/config:ro \
-     whatseerr-bot
-   ```
-
-3. **View logs:**
-   ```bash
-   docker-compose logs -f
-   # or
-   docker logs -f whatseerr-bot
-   ```
-
-4. **Stop the container:**
-   ```bash
-   docker-compose down
-   # or
-   docker stop whatseerr-bot
-   ```
-
-**Important:** 
-- The config file must be located at `/config/config.json` inside the container
-- The container includes `config.example.json` at `/config/config.example.json` as a template
-- If you mount a `config/` volume, it will override the container's `/config` directory
-- Make sure your `config.json` file is in the mounted `config/` directory, or copy it from the example in the container
-
-
+MIT

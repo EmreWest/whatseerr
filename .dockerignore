@@ -1,16 +1,33 @@
+# Dependencies
 node_modules/
 npm-debug.log
+*.log
+
+# Git
 .git/
 .gitignore
+.github/
+
+# Environment & secrets
 .env
 .env.*
-*.log
+config.json
+config/config.json
+config/subscriptions.json
+
+# Development files
 .DS_Store
 .idea/
 .vscode/
-config.json
-config/config.json
-*.md
-reference/
-scripts/
+.claude/
+docker-compose.yml
 
+# Documentation (dev only - exclude all except README)
+*.md
+!README.md
+
+# Reference materials (dev only)
+reference/
+
+# Scripts (dev only)
+scripts/
