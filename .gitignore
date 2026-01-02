@@ -1,21 +1,23 @@
-# Local configuration (contains secrets)
-config.json
+# Configuration files with secrets
+config/config.json
 config/subscriptions.json
 
-## Node / npm
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-## Env files (often contain secrets)
+# Environment files
 .env
 .env.*
 
-## OS / editor cruft
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS files
 .DS_Store
+
+# Editor / IDE
 .idea/
 .vscode/
+.claude/
 
 
