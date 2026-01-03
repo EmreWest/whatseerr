@@ -175,6 +175,19 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
+// Version display
+if (process.argv.includes('--version') || process.argv.includes('-v')) {
+  const fs = await import('fs/promises');
+  const path = await import('path');
+  const url = await import('url');
+
+  const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+  const pkg = JSON.parse(await fs.readFile(path.join(__dirname, 'package.json'), 'utf8'));
+
+  console.log(`Whatseerr v${pkg.version}`);
+  process.exit(0);
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
     const cfg = (() => {

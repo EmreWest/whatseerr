@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>whatseerr</Name>
+  <Repository>ghcr.io/sufxgit/whatseerr</Repository>
+  <Registry>https://ghcr.io/</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/sufxgit/whatseerr/issues</Support>
+  <Project>https://github.com/sufxgit/whatseerr</Project>
+  <Overview>WhatsApp bot for Seerr that allows users to search and request movies/TV shows via WhatsApp messages. Integrates with WAHA (WhatsApp HTTP API) and Seerr (Jellyseerr/Overseerr) for seamless media requests.&#xD;
+&#xD;
+Prerequisites:&#xD;
+- WAHA (WhatsApp HTTP API) running and configured&#xD;
+- Seerr instance (Jellyseerr/Overseerr)&#xD;
+&#xD;
+Setup:&#xD;
+1. On first run, config.example.json will be created in /config&#xD;
+2. Rename it to config.json and configure:&#xD;
+   - host: Hostname/IP where services can reach each other&#xD;
+   - jellyseerr.apiKey: Get from Seerr Settings > General&#xD;
+   - waha.apiKey: Your WAHA API key&#xD;
+   - userIdMappings: Map WhatsApp numbers to Seerr user IDs&#xD;
+3. Configure WAHA webhook to: http://YOUR_HOST:3006/requests&#xD;
+4. (Optional) Configure Seerr webhook to: http://YOUR_HOST:3006/seerr</Overview>
+  <Category>MediaApp:Other Tools:</Category>
+  <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/sufxgit/whatseerr/main/templates/whatseerr.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/sufxgit/whatseerr/main/logo.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="Config Directory" Target="/config" Default="/mnt/user/appdata/whatseerr/config" Mode="rw" Description="Configuration directory for Whatseerr. On first run, config.example.json will be created here. Rename it to config.json and update with your settings." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Webhook Port" Target="3006" Default="3006" Mode="tcp" Description="Port for webhook server. WAHA and Seerr will send webhooks to this port." Type="Port" Display="always" Required="true" Mask="false"/>
+  <Config Name="Timezone" Target="TZ" Default="UTC" Mode="" Description="Timezone for the container (e.g., America/New_York, Europe/London, Asia/Kuwait)." Type="Variable" Display="always" Required="false" Mask="false"/>
+</Container>
