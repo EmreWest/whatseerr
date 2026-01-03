@@ -1,6 +1,10 @@
-# Whatseerr
+<div align="center">
+  <img src="logo.png" alt="Whatseerr Logo" width="200"/>
 
-WhatsApp bot for Seerr that allows users to search and request movies/TV shows via WhatsApp messages.
+  # Whatseerr
+
+  WhatsApp bot for Seerr that allows users to search and request movies/TV shows via WhatsApp messages.
+</div>
 
 ## Features
 
