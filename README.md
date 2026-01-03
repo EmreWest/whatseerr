@@ -15,6 +15,10 @@
 - ⚡ Rate limiting and message queuing
 - 🎯 Support for 4K requests (optional)
 
+## Screenshots
+
+📸 [View Screenshots](SCREENSHOTS.md)
+
 ## Quick Start (Docker - Recommended)
 
 ### Prerequisites
@@ -61,12 +65,14 @@ services:
     ```json
     "1234567890": {
       "userId": 1,
-      "username": ""
+      "username": "",
+      "admin": true
     }
     ```
     - `"1234567890"`: WhatsApp phone number including country code (without @c.us suffix)
     - `userId`: The user ID from your Seerr instance - each user has their own unique ID (found in Seerr → Users)
     - `username`: Optional custom display name (leave empty to use Seerr username)
+    - `admin`: Add `"admin": true` if the user is an admin (omit or set to false otherwise)
 
 **Unraid:**
 - Repository: `ghcr.io/sufxgit/whatseerr:latest`
