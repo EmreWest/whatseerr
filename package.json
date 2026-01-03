@@ -1,7 +1,29 @@
 {
-  "name": "jellyseerr-cli-requester",
+  "name": "whatseerr",
   "version": "1.0.0",
-  "description": "Simple Node.js CLI to request movies and TV shows from Jellyseerr via text input, with WhatsApp bot support via WAHA.",
+  "description": "WhatsApp bot for Seerr that allows users to search and request media via WhatsApp messages.",
+  "keywords": [
+    "whatsapp",
+    "seerr",
+    "jellyseerr",
+    "overseerr",
+    "waha",
+    "bot",
+    "movies",
+    "tv-shows",
+    "media",
+    "request"
+  ],
+  "author": "WhatSeerr Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sufxgit/whatseerr.git"
+  },
+  "homepage": "https://github.com/sufxgit/whatseerr#readme",
+  "bugs": {
+    "url": "https://github.com/sufxgit/whatseerr/issues"
+  },
   "type": "module",
   "main": "lib/request.js",
   "bin": {
@@ -14,8 +36,6 @@
     "whatsapp": "node whatsapp-bot.js",
     "configure-webhook": "node scripts/configure-webhook.js"
   },
-  "author": "",
-  "license": "MIT",
   "dependencies": {
     "fastify": "^4.29.1",
     "@fastify/cors": "^8.5.0",
