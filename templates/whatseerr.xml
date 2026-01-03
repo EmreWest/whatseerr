@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/sufxgit/whatseerr/issues</Support>
   <Project>https://github.com/sufxgit/whatseerr</Project>
-  <Overview>WhatsApp bot for Seerr that allows users to search and request movies/TV shows via WhatsApp messages. Integrates with WAHA (WhatsApp HTTP API) and Seerr (Jellyseerr/Overseerr) for seamless media requests.&#xD;
+  <Overview>WhatsApp bot for Seerr that allows users to search and request media via WhatsApp messages. Integrates with WAHA (WhatsApp HTTP API) and Seerr (Jellyseerr/Overseerr) for seamless media requests.&#xD;
 &#xD;
 Prerequisites:&#xD;
 - WAHA (WhatsApp HTTP API) running and configured&#xD;
@@ -26,8 +26,8 @@ Setup:&#xD;
 4. (Optional) Configure Seerr webhook to: http://YOUR_HOST:3006/seerr</Overview>
   <Category>MediaApp:Other Tools:</Category>
   <WebUI/>
-  <TemplateURL>https://raw.githubusercontent.com/sufxgit/whatseerr/main/templates/whatseerr.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/sufxgit/whatseerr/main/logo.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/templates/whatseerr.xml?token=GHSAT0AAAAAADOKP5QW6SOKOSHKODMTPMPS2KZR2GA</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/logo.png?token=GHSAT0AAAAAADOKP5QXWXFK67KDQIDSVROO2KZRYXA</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
