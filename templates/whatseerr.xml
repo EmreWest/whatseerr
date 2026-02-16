@@ -21,7 +21,7 @@
   <Category>MediaApp:Other Tools:</Category>
   <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/templates/whatseerr.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/logo.png?token=GHSAT0AAAAAADOGFYMLSVHRIR3HB4WRXWAS2KZKTXA</Icon>
+  <Icon>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/logo.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
