@@ -20,7 +20,7 @@
 4. (Optional) Configure Seerr webhook to: http://YOUR_HOST:3006/seerr</Overview>
   <Category>MediaApp:Other Tools:</Category>
   <WebUI/>
-  <TemplateURL>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/templates/whatseerr.xml?token=GHSAT0AAAAAADOKP5QW6SOKOSHKODMTPMPS2KZR2GA</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/templates/whatseerr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/SuFxGIT/whatseerr/refs/heads/main/logo.png?token=GHSAT0AAAAAADOGFYMLSVHRIR3HB4WRXWAS2KZKTXA</Icon>
   <ExtraParams/>
   <PostArgs/>
