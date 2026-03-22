@@ -4,6 +4,8 @@
   # Whatseerr
 
   WhatsApp bot for Seerr that allows users to search and request media via WhatsApp messages.
+
+  [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/sufx)
 </div>
 
 ## Features
