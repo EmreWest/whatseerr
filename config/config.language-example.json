@@ -1,0 +1,50 @@
+/**
+ * Example configuration showing language settings
+ * Copy this file to config/config.json and customize the settings
+ */
+
+{
+  "system": {
+    "protocol": "http",
+    "host": "localhost",
+    "logging": {
+      "level": "info"
+    },
+    // Bot language: "en" (English, default) or "de" (German)
+    // Can also be set via BOT_LANGUAGE environment variable (takes precedence)
+    "language": "de"
+  },
+  "services": {
+    "jellyseerr": {
+      "baseUrl": "http://localhost:5055",
+      "apiKey": "your-jellyseerr-api-key",
+      "port": 5055
+    },
+    "waha": {
+      "baseUrl": "http://localhost:3000",
+      "apiKey": "your-waha-api-key",
+      "port": 3000
+    }
+  },
+  "webhook": {
+    "requests": {
+      "path": "/webhook/requests",
+      "port": 3006
+    }
+  },
+  "commands": {
+    "command": ["r", "request"],
+    "command4k": ["r4k", "request4k"],
+    "help4k": true
+  },
+  "jellyseerr": {
+    "defaultUserId": 1
+  },
+  "userIdMappings": {
+    "1234567890": {
+      "userId": 1,
+      "username": "",
+      "admin": true
+    }
+  }
+}
