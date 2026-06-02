@@ -3,6 +3,7 @@
   "system": {
     "protocol": "http",
     "host": "localhost",
+    "language": "en",
     "logging": {
       "level": "info",
       "timestamps": false
