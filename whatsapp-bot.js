@@ -148,6 +148,7 @@ async function main() {
   const wahaClient = createWahaClient(cfg.waha.baseUrl);
 
   logger?.info('🤖 Starting WhatsApp bot...');
+  logger?.info(`🌐 Language: ${cfg.__language}`);
   logger?.info(`🔗 Jellyseerr: ${cfg.jellyseerr.baseUrl}`);
   logger?.info(`🔗 WAHA: ${cfg.waha.baseUrl}`);
   logger?.info(`🧩 WAHA Session: ${cfg.waha?.session || 'default'}`);
