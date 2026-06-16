@@ -14,7 +14,7 @@ services:
     environment:
       - NODE_ENV=development
       - WEBHOOK_EXTERNAL_PORT=3006
-      - BOT_LANGUAGE=en
+      - BOT_LANGUAGE=de
       - TZ=Asia/Kuwait
     command: node --watch whatsapp-bot.js  # Use watch mode for live reload
     networks:
