@@ -9,10 +9,6 @@ config/subscriptions.json
 # Dependencies
 node_modules/
 
-# .NET build artifacts
-bin/
-obj/
-
 # Logs
 *.log
 
@@ -23,4 +19,3 @@ obj/
 .idea/
 .vscode/
 .claude/
-
